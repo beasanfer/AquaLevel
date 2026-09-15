@@ -1,0 +1,12 @@
+{
+  "name": "aqualevel",
+  "version": "1.0.0",
+  "description": "Dashboard AquaLevel",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}

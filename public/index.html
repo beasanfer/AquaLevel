@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AquaLevel</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<!-- NAVBAR -->
+<nav class="topbar">
+    <div class="brand">
+        <h2>AquaLevel</h2>
+        <span>Automação e Controle Inteligente de Reservatórios</span>
+    </div>
+    <div class="menu">
+        <a class="nav-link active" data-page="dashboard">
+            <img src="./icons/dashboard.png" alt="">
+            Dashboard
+        </a>
+        <a class="nav-link" data-page="historico">
+            <img src="./icons/historico.png" alt="">
+            Histórico
+        </a>
+        <a class="nav-link" data-page="alertas-page">
+            <img src="./icons/alerta.png" alt="">
+            Alertas
+        </a>
+        <a class="nav-link" data-page="configuracoes">
+            <img src="./icons/configuracao.png" alt="">
+            Configurações
+        </a>
+        <a class="nav-link" data-page="relatorios">
+            <img src="./icons/relatorio.png" alt="">
+            Relatórios
+        </a>
+        <a class="nav-link" data-page="sobre">
+            <img src="./icons/informacao.png" alt="">
+            Sobre
+        </a>
+    </div>
+    <div class="connection">
+        <strong id="wifiStatus">● Conectado</strong>
+        <span>ESP32 • Online</span>
+    </div>
+</nav>
+
+<!-- DASHBOARD -->
+<main id="dashboard" class="page active-page">
+    <header>
+        <div>
+            <h1>Dashboard</h1>
+            <p>Visão geral do reservatório e da bomba</p>
+        </div>
+        <div class="update">
+            Última atualização:
+            <strong id="horaAtualizacao">--:--:--</strong>
+        </div>
+    </header>
+
+    <!-- PRIMEIRA LINHA -->
+    <section class="grid-top">
+        <!-- NÍVEL -->
+        <article class="card nivel-card">
+            <h3>NÍVEL DO RESERVATÓRIO</h3>
+            <div class="nivel-content">
+                <div class="gauge">
+                    <div id="percentual">72%</div>
+                    <span id="litros">720 litros</span>
+                    <p>● <span id="nivelStatus">Nível normal</span></p>
+                </div>
+                <div class="tanque">
+                    <div class="agua" id="agua"></div>
+                </div>
+            </div>
+            <div class="details">
+                <span>Capacidade<strong>1000 litros</strong></span>
+                <span>Altura da água<strong id="altura">72 cm</strong></span>
+                <span>Última medição<strong id="ultimaMedicao">--:--:--</strong></span>
+            </div>
+        </article>
+
+        <!-- BOMBA -->
+        <article class="card bomba-card">
+            <h3>BOMBA</h3>
+            <h2 id="bombaStatus">Ligada</h2>
+            <p class="bomba-descricao">Funcionando normalmente</p>
+            <div class="bomba-info">
+                <div>
+                    <span>Acionamento</span>
+                    <strong id="acionamentoBomba">Automático</strong>
+                </div>
+            </div>
+        </article>
+
+        <!-- MODO -->
+        <article class="card modo-card">
+            <h3>MODO DE OPERAÇÃO</h3>
+            <button id="btnAutomatico" class="mode active-mode">Automático</button>
+            <button id="btnManual" class="mode">Manual</button>
+            <p>A bomba opera com base nos limites configurados.</p>
+        </article>
+
+        <!-- CONTROLE -->
+        <article class="card controle-card">
+            <h3>CONTROLE RÁPIDO</h3>
+            <button id="ligarBomba" class="btn ligar">▶ Ligar bomba</button>
+            <button id="desligarBomba" class="btn desligar">■ Desligar bomba</button>
+            <p>Disponível somente no modo manual.</p>
+        </article>
+    </section>
+
+    <!-- LIMITES E ALERTAS -->
+    <section class="grid-middle">
+        <article class="card">
+            <h3>LIMITES CONFIGURADOS</h3>
+            <div class="limits">
+                <div>
+                    <label>Nível mínimo</label>
+                    <h2><span id="minValue">30</span>%</h2>
+                    <input id="minimo" type="range" min="0" max="100" value="30">
+                </div>
+                <div>
+                    <label>Histerese</label>
+                    <h2>5%</h2>
+                </div>
+                <div>
+                    <label>Nível máximo</label>
+                    <h2><span id="maxValue">90</span>%</h2>
+                    <input id="maximo" type="range" min="0" max="100" value="90">
+                </div>
+            </div>
+            <button id="salvarLimites" class="btn salvar">Salvar limites</button>
+        </article>
+
+        <article class="card">
+            <h3>ALERTAS ATIVOS</h3>
+            <div id="alertas">
+                <div class="alert danger">
+                    ⚠
+                    <div>
+                        <strong>Nível crítico</strong>
+                        <p>Nível abaixo do mínimo configurado.</p>
+                    </div>
+                </div>
+                <div class="alert warning">
+                    ⚠
+                    <div>
+                        <strong>Falha na leitura do sensor</strong>
+                        <p>Leitura inconsistente detectada.</p>
+                    </div>
+                </div>
+            </div>
+        </article>
+    </section>
+
+    <!-- HISTÓRICO RESUMIDO -->
+    <section class="grid-bottom">
+        <article class="card">
+            <h3>HISTÓRICO DO NÍVEL</h3>
+            <canvas id="graficoNivel"></canvas>
+            <div class="statistics">
+                <div>Nível médio<strong>58%</strong></div>
+                <div>Nível máximo<strong>95%</strong></div>
+                <div>Nível mínimo<strong>22%</strong></div>
+                <div>Consumo estimado<strong>280 litros</strong></div>
+            </div>
+        </article>
+        <article class="card">
+            <h3>ÚLTIMOS EVENTOS</h3>
+            <div id="eventos">
+                <p>▶ Bomba ligada automaticamente</p>
+                <p>■ Bomba desligada por proteção</p>
+                <p>⚠ Falha na leitura do sensor</p>
+                <p>ⓘ Modo alterado para automático</p>
+            </div>
+        </article>
+    </section>
+</main>
+
+<!-- HISTÓRICO -->
+<main id="historico" class="page">
+    <header>
+        <div>
+            <h1>Histórico</h1>
+            <p>Histórico de medições e eventos do reservatório</p>
+        </div>
+    </header>
+    <section class="page-grid">
+        <article class="card">
+            <h3>HISTÓRICO DE MEDIÇÕES</h3>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Hora</th>
+                            <th>Nível</th>
+                            <th>Volume</th>
+                            <th>Bomba</th>
+                            <th>Modo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>15/09/2026</td>
+                            <td>16:45</td>
+                            <td>72%</td>
+                            <td>720 L</td>
+                            <td>Ligada</td>
+                            <td>Automático</td>
+                        </tr>
+                        <tr>
+                            <td>15/09/2026</td>
+                            <td>16:40</td>
+                            <td>68%</td>
+                            <td>680 L</td>
+                            <td>Ligada</td>
+                            <td>Automático</td>
+                        </tr>
+                        <tr>
+                            <td>15/09/2026</td>
+                            <td>16:35</td>
+                            <td>63%</td>
+                            <td>630 L</td>
+                            <td>Ligada</td>
+                            <td>Automático</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
+</main>
+
+<!-- ALERTAS -->
+<main id="alertas-page" class="page">
+    <header>
+        <div>
+            <h1>Alertas</h1>
+            <p>Acompanhamento dos alertas emitidos pelo sistema</p>
+        </div>
+    </header>
+    <section class="page-grid">
+        <article class="card">
+            <h3>ALERTAS DO SISTEMA</h3>
+            <div class="alert danger">
+                ⚠
+                <div>
+                    <strong>Nível crítico</strong>
+                    <p>O nível do reservatório ficou abaixo do mínimo configurado.</p>
+                    <small>15/09/2026 • 14:32</small>
+                </div>
+            </div>
+            <div class="alert warning">
+                ⚠
+                <div>
+                    <strong>Falha na leitura do sensor</strong>
+                    <p>Foi detectada uma leitura inconsistente do sensor ultrassônico.</p>
+                    <small>15/09/2026 • 12:18</small>
+                </div>
+            </div>
+        </article>
+    </section>
+</main>
+
+<!-- CONFIGURAÇÕES -->
+<main id="configuracoes" class="page">
+    <header>
+        <div>
+            <h1>Configurações</h1>
+            <p>Parâmetros de funcionamento do AquaLevel</p>
+        </div>
+    </header>
+    <section class="config-grid">
+        <article class="card">
+            <h3>LIMITES DO RESERVATÓRIO</h3>
+            <div class="config-item">
+                <label>Nível mínimo</label>
+                <p>Define o nível para acionamento automático da bomba.</p>
+                <strong>30%</strong>
+            </div>
+            <div class="config-item">
+                <label>Nível máximo</label>
+                <p>Define o nível para desligamento automático da bomba.</p>
+                <strong>90%</strong>
+            </div>
+            <div class="config-item">
+                <label>Histerese</label>
+                <p>Evita acionamentos repetidos próximos aos limites.</p>
+                <strong>5%</strong>
+            </div>
+        </article>
+        <article class="card">
+            <h3>MODO DE FUNCIONAMENTO</h3>
+            <div class="config-item">
+                <label>Modo atual</label>
+                <p>Controle automático de acordo com os limites configurados.</p>
+                <strong id="modoConfiguracao">Automático</strong>
+            </div>
+        </article>
+    </section>
+</main>
+
+<!-- RELATÓRIOS -->
+<main id="relatorios" class="page">
+    <header>
+        <div>
+            <h1>Relatórios</h1>
+            <p>Resumo das informações registradas pelo sistema</p>
+        </div>
+    </header>
+    <section class="report-grid">
+        <article class="card report-card">
+            <span>Nível médio</span>
+            <strong>58%</strong>
+            <p>Média das medições registradas</p>
+        </article>
+        <article class="card report-card">
+            <span>Nível máximo</span>
+            <strong>95%</strong>
+            <p>Maior nível registrado</p>
+        </article>
+        <article class="card report-card">
+            <span>Nível mínimo</span>
+            <strong>22%</strong>
+            <p>Menor nível registrado</p>
+        </article>
+        <article class="card report-card">
+            <span>Acionamentos</span>
+            <strong>12</strong>
+            <p>Acionamentos da bomba registrados</p>
+        </article>
+    </section>
+</main>
+
+<!-- SOBRE -->
+<main id="sobre" class="page">
+    <header>
+        <div>
+            <h1>Sobre</h1>
+            <p>Informações sobre o sistema AquaLevel</p>
+        </div>
+    </header>
+    <section class="sobre-grid">
+        <article class="card">
+            <h3>AQUALEVEL</h3>
+            <h2>Automação e Controle Inteligente de Reservatórios de Água</h2>
+            <p class="sobre-texto">O AquaLevel é um sistema embarcado inteligente desenvolvido para monitorar e controlar automaticamente o nível de água em reservatórios.</p>
+            <div class="sobre-info">
+                <div>
+                    <strong>ESP32</strong>
+                    <span>Microcontrolador responsável pelo processamento e comunicação Wi-Fi.</span>
+                </div>
+                <div>
+                    <strong>HC-SR04</strong>
+                    <span>Sensor ultrassônico utilizado para monitoramento do nível da água.</span>
+                </div>
+                <div>
+                    <strong>Controle automático</strong>
+                    <span>Aciona e desliga a bomba conforme os limites configurados.</span>
+                </div>
+                <div>
+                    <strong>Dashboard Web</strong>
+                    <span>Permite acompanhar nível, bomba, alertas e histórico.</span>
+                </div>
+            </div>
+        </article>
+    </section>
+</main>
+
+<script src="script.js"></script>
+</body>
+</html>
