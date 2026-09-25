@@ -1,3 +1,4 @@
+/* Monitoramento do nível de água - Issue #1 */
 /* 1. VARIÁVEIS */
 let modo="automatico";
 let nivel=72;
