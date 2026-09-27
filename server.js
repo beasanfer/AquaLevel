@@ -18,12 +18,28 @@ let sistema = {
 /* HISTÓRICO DE MEDIÇÕES */
 let historico = [];
 
+/* HISTÓRICO DE ACIONAMENTOS DA BOMBA */
+let historicoBomba = [];
+
+/* REGISTRAR ALTERAÇÃO DE ESTADO DA BOMBA */
+function registrarAcionamento(novoEstado) {
+    if (sistema.bombaLigada !== novoEstado) {
+        sistema.bombaLigada = novoEstado;
+
+        historicoBomba.push({
+            estado: novoEstado ? "ligada" : "desligada",
+            modo: sistema.modo,
+            dataHora: new Date().toISOString()
+        });
+    }
+}
+
 /* CONTROLE AUTOMÁTICO DA BOMBA */
 function controleAutomatico() {
     if (sistema.nivel <= sistema.minimo) {
-        sistema.bombaLigada = true;
+        registrarAcionamento(true);
     } else if (sistema.nivel >= sistema.maximo) {
-        sistema.bombaLigada = false;
+        registrarAcionamento(false);
     }
 }
 
@@ -53,9 +69,14 @@ app.get("/api/status", (req, res) => {
     res.json(sistema);
 });
 
-/* CONSULTAR HISTÓRICO */
+/* CONSULTAR HISTÓRICO DE MEDIÇÕES */
 app.get("/api/historico", (req, res) => {
     res.json(historico);
+});
+
+/* CONSULTAR HISTÓRICO DE ACIONAMENTOS */
+app.get("/api/historico-bomba", (req, res) => {
+    res.json(historicoBomba);
 });
 
 /* ALTERAR BOMBA */
@@ -78,7 +99,7 @@ app.post("/api/bomba", (req, res) => {
         });
     }
 
-    sistema.bombaLigada = req.body.ligar;
+    registrarAcionamento(req.body.ligar);
 
     res.json(sistema);
 });
