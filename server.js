@@ -21,6 +21,10 @@ let historico = [];
 /* HISTÓRICO DE ACIONAMENTOS DA BOMBA */
 let historicoBomba = [];
 
+/* ALERTAS DE NÍVEL CRÍTICO */
+let alertas = [];
+let nivelCriticoAtivo = false;
+
 /* REGISTRAR ALTERAÇÃO DE ESTADO DA BOMBA */
 function registrarAcionamento(novoEstado) {
     if (sistema.bombaLigada !== novoEstado) {
@@ -31,6 +35,24 @@ function registrarAcionamento(novoEstado) {
             modo: sistema.modo,
             dataHora: new Date().toISOString()
         });
+    }
+}
+
+/* VERIFICAR NÍVEL CRÍTICO */
+function verificarNivelCritico() {
+    if (sistema.nivel <= sistema.minimo) {
+        if (!nivelCriticoAtivo) {
+            alertas.push({
+                tipo: "nivel_critico",
+                mensagem: "Nível de água crítico.",
+                nivel: sistema.nivel,
+                dataHora: new Date().toISOString()
+            });
+
+            nivelCriticoAtivo = true;
+        }
+    } else {
+        nivelCriticoAtivo = false;
     }
 }
 
@@ -55,6 +77,9 @@ app.post("/api/nivel", (req, res) => {
         dataHora: new Date().toISOString()
     });
 
+    /* VERIFICAR ALERTA DE NÍVEL CRÍTICO */
+    verificarNivelCritico();
+
     if (sistema.modo === "automatico") {
         controleAutomatico();
     }
@@ -77,6 +102,11 @@ app.get("/api/historico", (req, res) => {
 /* CONSULTAR HISTÓRICO DE ACIONAMENTOS */
 app.get("/api/historico-bomba", (req, res) => {
     res.json(historicoBomba);
+});
+
+/* CONSULTAR ALERTAS */
+app.get("/api/alertas", (req, res) => {
+    res.json(alertas);
 });
 
 /* ALTERAR BOMBA */
@@ -136,6 +166,8 @@ app.post("/api/limites", (req, res) => {
 
     sistema.minimo = minimo;
     sistema.maximo = maximo;
+
+    verificarNivelCritico();
 
     if (sistema.modo === "automatico") {
         controleAutomatico();
