@@ -15,123 +15,97 @@ let sistema = {
     sensorOK: true
 };
 
-/* ESP32 ENVIA LEITURA */
-app.post(
-    "/api/nivel",
-    (req, res) => {
-        sistema.nivel =
-            req.body.nivel;
-        sistema.litros =
-            req.body.litros;
-
-        /* CONTROLE AUTOMÁTICO DA BOMBA */
-        if (
-            sistema.modo ===
-            "automatico"
-        ) {
-            if (
-                sistema.nivel <=
-                sistema.minimo
-            ) {
-                sistema.bombaLigada =
-                    true;
-            } else if (
-                sistema.nivel >=
-                sistema.maximo
-            ) {
-                sistema.bombaLigada =
-                    false;
-            }
-        }
-
-        res.json({
-            sucesso: true
-        });
+function controleAutomatico() {
+    if (sistema.nivel <= sistema.minimo) {
+        sistema.bombaLigada = true;
+    } else if (sistema.nivel >= sistema.maximo) {
+        sistema.bombaLigada = false;
     }
-);
+}
+
+/* ESP32 ENVIA LEITURA */
+app.post("/api/nivel", (req, res) => {
+    sistema.nivel = Number(req.body.nivel);
+    sistema.litros = Number(req.body.litros);
+
+    if (sistema.modo === "automatico") {
+        controleAutomatico();
+    }
+
+    res.json({
+        sucesso: true
+    });
+});
 
 /* DASHBOARD CONSULTA */
-app.get(
-    "/api/status",
-    (req, res) => {
-        res.json(sistema);
-    }
-);
+app.get("/api/status", (req, res) => {
+    res.json(sistema);
+});
 
 /* ALTERAR BOMBA */
-app.post(
-    "/api/bomba",
-    (req, res) => {
-        if (
-            sistema.modo !==
-            "manual"
-        ) {
-            return res.status(400)
-            .json({
-                erro:
-                "Controle manual indisponível."
-            });
-        }
-
-        if (
-            req.body.ligar &&
-            sistema.nivel >=
-            sistema.maximo
-        ) {
-            return res.status(400)
-            .json({
-                erro:
-                "Limite máximo atingido."
-            });
-        }
-
-        sistema.bombaLigada =
-            req.body.ligar;
-        res.json(sistema);
+app.post("/api/bomba", (req, res) => {
+    if (sistema.modo !== "manual") {
+        return res.status(400).json({
+            erro: "Controle manual indisponível."
+        });
     }
-);
+
+    if (typeof req.body.ligar !== "boolean") {
+        return res.status(400).json({
+            erro: "Estado da bomba inválido."
+        });
+    }
+
+    if (req.body.ligar && sistema.nivel >= sistema.maximo) {
+        return res.status(400).json({
+            erro: "Limite máximo atingido."
+        });
+    }
+
+    sistema.bombaLigada = req.body.ligar;
+    res.json(sistema);
+});
 
 /* ALTERAR MODO */
-app.post(
-    "/api/modo",
-    (req, res) => {
-        sistema.modo =
-            req.body.modo;
-        res.json(sistema);
+app.post("/api/modo", (req, res) => {
+    const modo = req.body.modo;
+
+    if (modo !== "manual" && modo !== "automatico") {
+        return res.status(400).json({
+            erro: "Modo inválido."
+        });
     }
-);
+
+    sistema.modo = modo;
+
+    if (sistema.modo === "automatico") {
+        controleAutomatico();
+    }
+
+    res.json(sistema);
+});
 
 /* CONFIGURAR LIMITES */
-app.post(
-    "/api/limites",
-    (req, res) => {
-        const minimo =
-            Number(req.body.minimo);
-        const maximo =
-            Number(req.body.maximo);
+app.post("/api/limites", (req, res) => {
+    const minimo = Number(req.body.minimo);
+    const maximo = Number(req.body.maximo);
 
-        if (minimo >= maximo) {
-            return res
-            .status(400)
-            .json({
-                erro:
-                "Limites inválidos."
-            });
-        }
-
-        sistema.minimo =
-            minimo;
-        sistema.maximo =
-            maximo;
-        res.json(sistema);
+    if (minimo >= maximo) {
+        return res.status(400).json({
+            erro: "Limites inválidos."
+        });
     }
-);
 
-app.listen(
-    PORT,
-    () => {
-        console.log(
-            `AquaLevel rodando em http://localhost:${PORT}`
-        );
+    sistema.minimo = minimo;
+    sistema.maximo = maximo;
+
+    if (sistema.modo === "automatico") {
+        controleAutomatico();
     }
-);
+
+    res.json(sistema);
+});
+
+app.listen(PORT, () => {
+    console.log(`AquaLevel rodando em http://localhost:${PORT}`);
+});
