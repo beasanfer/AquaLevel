@@ -3,9 +3,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
-app.use(
-    express.static("public")
-);
+app.use(express.static("public"));
 
 let sistema = {
     nivel: 72,
@@ -26,16 +24,7 @@ app.post(
         sistema.litros =
             req.body.litros;
 
-        /* PROTEÇÃO */
-        if (
-            sistema.nivel >=
-            sistema.maximo
-        ) {
-            sistema.bombaLigada =
-                false;
-        }
-
-        /* MODO AUTOMÁTICO */
+        /* CONTROLE AUTOMÁTICO DA BOMBA */
         if (
             sistema.modo ===
             "automatico"
@@ -46,6 +35,12 @@ app.post(
             ) {
                 sistema.bombaLigada =
                     true;
+            } else if (
+                sistema.nivel >=
+                sistema.maximo
+            ) {
+                sistema.bombaLigada =
+                    false;
             }
         }
 
@@ -114,6 +109,7 @@ app.post(
             Number(req.body.minimo);
         const maximo =
             Number(req.body.maximo);
+
         if (minimo >= maximo) {
             return res
             .status(400)
