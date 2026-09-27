@@ -15,6 +15,10 @@ let sistema = {
     sensorOK: true
 };
 
+/* HISTÓRICO DE MEDIÇÕES */
+let historico = [];
+
+/* CONTROLE AUTOMÁTICO DA BOMBA */
 function controleAutomatico() {
     if (sistema.nivel <= sistema.minimo) {
         sistema.bombaLigada = true;
@@ -28,6 +32,13 @@ app.post("/api/nivel", (req, res) => {
     sistema.nivel = Number(req.body.nivel);
     sistema.litros = Number(req.body.litros);
 
+    /* REGISTRAR MEDIÇÃO NO HISTÓRICO */
+    historico.push({
+        nivel: sistema.nivel,
+        litros: sistema.litros,
+        dataHora: new Date().toISOString()
+    });
+
     if (sistema.modo === "automatico") {
         controleAutomatico();
     }
@@ -40,6 +51,11 @@ app.post("/api/nivel", (req, res) => {
 /* DASHBOARD CONSULTA */
 app.get("/api/status", (req, res) => {
     res.json(sistema);
+});
+
+/* CONSULTAR HISTÓRICO */
+app.get("/api/historico", (req, res) => {
+    res.json(historico);
 });
 
 /* ALTERAR BOMBA */
@@ -63,6 +79,7 @@ app.post("/api/bomba", (req, res) => {
     }
 
     sistema.bombaLigada = req.body.ligar;
+
     res.json(sistema);
 });
 
@@ -106,6 +123,7 @@ app.post("/api/limites", (req, res) => {
     res.json(sistema);
 });
 
+/* INICIAR SERVIDOR */
 app.listen(PORT, () => {
     console.log(`AquaLevel rodando em http://localhost:${PORT}`);
 });
