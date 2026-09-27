@@ -58,6 +58,10 @@ function verificarNivelCritico() {
 
 /* CONTROLE AUTOMÁTICO DA BOMBA */
 function controleAutomatico() {
+    if (!sistema.sensorOK) {
+        return;
+    }
+
     if (sistema.nivel <= sistema.minimo) {
         registrarAcionamento(true);
     } else if (sistema.nivel >= sistema.maximo) {
@@ -67,8 +71,36 @@ function controleAutomatico() {
 
 /* ESP32 ENVIA LEITURA */
 app.post("/api/nivel", (req, res) => {
-    sistema.nivel = Number(req.body.nivel);
-    sistema.litros = Number(req.body.litros);
+    const nivel = Number(req.body.nivel);
+    const litros = Number(req.body.litros);
+
+    /* VALIDAR LEITURA DO SENSOR */
+    if (
+        req.body.nivel === undefined ||
+        req.body.nivel === null ||
+        req.body.nivel === "" ||
+        !Number.isFinite(nivel) ||
+        nivel < 0 ||
+        nivel > 100 ||
+        req.body.litros === undefined ||
+        req.body.litros === null ||
+        req.body.litros === "" ||
+        !Number.isFinite(litros) ||
+        litros < 0
+    ) {
+        sistema.sensorOK = false;
+
+        return res.status(400).json({
+            sucesso: false,
+            erro: "Leitura inválida do sensor."
+        });
+    }
+
+    /* SENSOR VOLTOU AO FUNCIONAMENTO NORMAL */
+    sistema.sensorOK = true;
+
+    sistema.nivel = nivel;
+    sistema.litros = litros;
 
     /* REGISTRAR MEDIÇÃO NO HISTÓRICO */
     historico.push({
