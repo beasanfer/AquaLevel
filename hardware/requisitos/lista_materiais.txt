@@ -1,0 +1,25 @@
+Equipamentos necessários
+
+1. ESP32 DevKit – 1 unidade
+2. Sensor ultrassônico HC-SR04 – 1 unidade
+3. Módulo relé – 1 unidade
+4. Bomba d’água – 1 unidade
+5. Reservatórios transparentes – 2 unidades
+6. Mangueiras – aproximadamente 2 a 3 metros
+7. Fonte de alimentação para a bomba – 1 unidade
+8. Cabo USB ou fonte para o ESP32 – 1 unidade
+9. Protoboard – 1 unidade
+10. Jumpers macho-macho – 1 kit
+11. Jumpers macho-fêmea – 1 kit
+12. Jumpers fêmea-fêmea – 1 kit
+13. LED verde – 1 unidade
+14. LED amarelo – 1 unidade
+15. LED vermelho – 1 unidade
+16. LED azul – 1 unidade
+17. Resistores para LEDs – 4 unidades
+18. Resistores para divisor de tensão do HC-SR04 – 2 unidades
+19. Buzzer – 1 unidade
+20. Conectores e adaptadores hidráulicos – conforme necessário
+21. Abraçadeiras para mangueiras – conforme necessário
+22. Fios/cabos elétricos – conforme necessário
+23. Caixa para eletrônica – 1 unidade
