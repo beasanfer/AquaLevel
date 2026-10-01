@@ -1,4 +1,5 @@
 /* Monitoramento do nível de água - Issue #1 */
+
 /* 1. VARIÁVEIS */
 let modo="automatico";
 let nivel=72;
@@ -22,6 +23,7 @@ const inputMax=document.getElementById("maximo");
 const minValue=document.getElementById("minValue");
 const maxValue=document.getElementById("maxValue");
 const salvarLimites=document.getElementById("salvarLimites");
+const tabelaHistorico=document.getElementById("tabelaHistorico");
 
 /* 3. NAVEGAÇÃO */
 const navLinks=document.querySelectorAll(".nav-link");
@@ -30,10 +32,22 @@ const pages=document.querySelectorAll(".page");
 navLinks.forEach(link=>{
     link.addEventListener("click",()=>{
         const pageId=link.dataset.page;
-        pages.forEach(page=>page.classList.remove("active-page"));
-        navLinks.forEach(item=>item.classList.remove("active"));
+
+        pages.forEach(page=>{
+            page.classList.remove("active-page");
+        });
+
+        navLinks.forEach(item=>{
+            item.classList.remove("active");
+        });
+
         document.getElementById(pageId).classList.add("active-page");
         link.classList.add("active");
+
+        if(pageId==="historico"){
+            buscarHistorico();
+        }
+
         window.scrollTo(0,0);
     });
 });
@@ -43,13 +57,17 @@ function atualizarDashboard(){
     percentual.textContent=nivel+"%";
     litros.textContent=nivel*10+" litros";
     agua.style.height=nivel+"%";
+
     bombaStatus.textContent=bombaLigada?"Ligada":"Desligada";
     bombaStatus.style.color=bombaLigada?"#27a355":"#ef4040";
+
     const agora=new Date().toLocaleTimeString();
+
     ultimaMedicao.textContent=agora;
     horaAtualizacao.textContent=agora;
 
     const nivelStatus=document.getElementById("nivelStatus");
+
     if(nivel<minimo){
         nivelStatus.textContent="Nível crítico";
         nivelStatus.parentElement.style.color="#c92d2d";
@@ -70,13 +88,18 @@ function atualizarDashboard(){
     }
 
     const acionamentoBomba=document.getElementById("acionamentoBomba");
+
     if(acionamentoBomba){
-        acionamentoBomba.textContent=modo==="automatico"?"Automático":"Manual";
+        acionamentoBomba.textContent=
+            modo==="automatico"?"Automático":"Manual";
     }
 
-    const modoConfiguracao=document.getElementById("modoConfiguracao");
+    const modoConfiguracao=
+        document.getElementById("modoConfiguracao");
+
     if(modoConfiguracao){
-        modoConfiguracao.textContent=modo==="automatico"?"Automático":"Manual";
+        modoConfiguracao.textContent=
+            modo==="automatico"?"Automático":"Manual";
     }
 
     ligarBomba.disabled=modo!=="manual";
@@ -85,27 +108,43 @@ function atualizarDashboard(){
 
 /* 5. LIGAR BOMBA */
 ligarBomba.addEventListener("click",async()=>{
+
     if(modo!=="manual"){
         alert("Controle disponível somente no modo manual.");
         return;
     }
+
     if(nivel>=maximo){
-        alert("A bomba não pode ser ligada. Limite máximo atingido.");
+        alert(
+            "A bomba não pode ser ligada. Limite máximo atingido."
+        );
         return;
     }
+
     try{
         const resposta=await fetch("/api/bomba",{
             method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({ligar:true})
+            headers:{
+                "Content-Type":"application/json"
+            },
+            body:JSON.stringify({
+                ligar:true
+            })
         });
+
         const dados=await resposta.json();
+
         if(!resposta.ok){
-            alert(dados.erro||"Erro ao ligar a bomba.");
+            alert(
+                dados.erro||"Erro ao ligar a bomba."
+            );
             return;
         }
+
         bombaLigada=true;
+
         atualizarDashboard();
+
     }catch(erro){
         console.error("Erro:",erro);
     }
@@ -113,23 +152,36 @@ ligarBomba.addEventListener("click",async()=>{
 
 /* 6. DESLIGAR BOMBA */
 desligarBomba.addEventListener("click",async()=>{
+
     if(modo!=="manual"){
         alert("Controle disponível somente no modo manual.");
         return;
     }
+
     try{
         const resposta=await fetch("/api/bomba",{
             method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({ligar:false})
+            headers:{
+                "Content-Type":"application/json"
+            },
+            body:JSON.stringify({
+                ligar:false
+            })
         });
+
         const dados=await resposta.json();
+
         if(!resposta.ok){
-            alert(dados.erro||"Erro ao desligar a bomba.");
+            alert(
+                dados.erro||"Erro ao desligar a bomba."
+            );
             return;
         }
+
         bombaLigada=false;
+
         atualizarDashboard();
+
     }catch(erro){
         console.error("Erro:",erro);
     }
@@ -137,19 +189,31 @@ desligarBomba.addEventListener("click",async()=>{
 
 /* 7. MODO AUTOMÁTICO */
 btnAutomatico.addEventListener("click",async()=>{
+
     try{
         const resposta=await fetch("/api/modo",{
             method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({modo:"automatico"})
+            headers:{
+                "Content-Type":"application/json"
+            },
+            body:JSON.stringify({
+                modo:"automatico"
+            })
         });
+
         const dados=await resposta.json();
+
         if(!resposta.ok){
-            alert(dados.erro||"Erro ao alterar modo.");
+            alert(
+                dados.erro||"Erro ao alterar modo."
+            );
             return;
         }
+
         modo="automatico";
+
         atualizarDashboard();
+
     }catch(erro){
         console.error("Erro:",erro);
     }
@@ -157,19 +221,31 @@ btnAutomatico.addEventListener("click",async()=>{
 
 /* 8. MODO MANUAL */
 btnManual.addEventListener("click",async()=>{
+
     try{
         const resposta=await fetch("/api/modo",{
             method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({modo:"manual"})
+            headers:{
+                "Content-Type":"application/json"
+            },
+            body:JSON.stringify({
+                modo:"manual"
+            })
         });
+
         const dados=await resposta.json();
+
         if(!resposta.ok){
-            alert(dados.erro||"Erro ao alterar modo.");
+            alert(
+                dados.erro||"Erro ao alterar modo."
+            );
             return;
         }
+
         modo="manual";
+
         atualizarDashboard();
+
     }catch(erro){
         console.error("Erro:",erro);
     }
@@ -186,30 +262,45 @@ inputMax.addEventListener("input",()=>{
 
 /* 10. SALVAR LIMITES */
 salvarLimites.addEventListener("click",async()=>{
+
     const novoMinimo=Number(inputMin.value);
     const novoMaximo=Number(inputMax.value);
+
     if(novoMinimo>=novoMaximo){
-        alert("O limite mínimo deve ser menor que o máximo.");
+        alert(
+            "O limite mínimo deve ser menor que o máximo."
+        );
         return;
     }
+
     try{
         const resposta=await fetch("/api/limites",{
             method:"POST",
-            headers:{"Content-Type":"application/json"},
+            headers:{
+                "Content-Type":"application/json"
+            },
             body:JSON.stringify({
                 minimo:novoMinimo,
                 maximo:novoMaximo
             })
         });
+
         const dados=await resposta.json();
+
         if(!resposta.ok){
-            alert(dados.erro||"Erro ao salvar limites.");
+            alert(
+                dados.erro||"Erro ao salvar limites."
+            );
             return;
         }
+
         minimo=novoMinimo;
         maximo=novoMaximo;
+
         atualizarDashboard();
+
         alert("Limites atualizados.");
+
     }catch(erro){
         console.error("Erro:",erro);
     }
@@ -217,20 +308,39 @@ salvarLimites.addEventListener("click",async()=>{
 
 /* 11. GRÁFICO */
 const ctx=document.getElementById("graficoNivel");
+
 const grafico=new Chart(ctx,{
     type:"line",
+
     data:{
-        labels:["10:00","12:00","14:00","16:00","18:00","20:00"],
+        labels:[
+            "10:00",
+            "12:00",
+            "14:00",
+            "16:00",
+            "18:00",
+            "20:00"
+        ],
+
         datasets:[{
             label:"Nível da água (%)",
-            data:[60,52,63,70,68,72],
+            data:[
+                60,
+                52,
+                63,
+                70,
+                68,
+                72
+            ],
             borderColor:"#0877e8",
             tension:0.3,
             fill:false
         }]
     },
+
     options:{
         responsive:true,
+
         scales:{
             y:{
                 min:0,
@@ -242,24 +352,37 @@ const grafico=new Chart(ctx,{
 
 /* 12. BUSCAR DADOS DO SERVIDOR */
 async function buscarDados(){
+
     try{
         const resposta=await fetch("/api/status");
+
         if(!resposta.ok){
-            throw new Error("Erro ao buscar dados.");
+            throw new Error(
+                "Erro ao buscar dados."
+            );
         }
+
         const dados=await resposta.json();
+
         nivel=dados.nivel;
         bombaLigada=dados.bombaLigada;
         minimo=dados.minimo;
         maximo=dados.maximo;
         modo=dados.modo;
+
         inputMin.value=minimo;
         inputMax.value=maximo;
+
         minValue.textContent=minimo;
         maxValue.textContent=maximo;
+
         atualizarDashboard();
+
     }catch(erro){
-        console.error("Erro de comunicação:",erro);
+        console.error(
+            "Erro de comunicação:",
+            erro
+        );
     }
 }
 
@@ -268,3 +391,96 @@ setInterval(buscarDados,5000);
 
 /* 14. PRIMEIRA BUSCA */
 buscarDados();
+
+/* 15. HISTÓRICO DE MEDIÇÕES - ISSUE #19 */
+async function buscarHistorico(){
+
+    if(!tabelaHistorico){
+        return;
+    }
+
+    try{
+        const resposta=await fetch("/api/historico");
+
+        if(!resposta.ok){
+            throw new Error(
+                "Erro ao buscar histórico."
+            );
+        }
+
+        const historico=await resposta.json();
+
+        tabelaHistorico.innerHTML="";
+
+        if(historico.length===0){
+
+            tabelaHistorico.innerHTML=`
+                <tr>
+                    <td colspan="6">
+                        Nenhuma medição registrada.
+                    </td>
+                </tr>
+            `;
+
+            return;
+        }
+
+        historico
+            .slice()
+            .reverse()
+            .forEach(registro=>{
+
+                const dataHora=
+                    new Date(registro.dataHora);
+
+                const data=
+                    dataHora.toLocaleDateString(
+                        "pt-BR"
+                    );
+
+                const hora=
+                    dataHora.toLocaleTimeString(
+                        "pt-BR",
+                        {
+                            hour:"2-digit",
+                            minute:"2-digit",
+                            second:"2-digit"
+                        }
+                    );
+
+                const linha=
+                    document.createElement("tr");
+
+                linha.innerHTML=`
+                    <td>${data}</td>
+                    <td>${hora}</td>
+                    <td>${registro.nivel}%</td>
+                    <td>${registro.litros} L</td>
+                    <td>-</td>
+                    <td>-</td>
+                `;
+
+                tabelaHistorico.appendChild(
+                    linha
+                );
+            });
+
+    }catch(erro){
+
+        console.error(
+            "Erro ao carregar histórico:",
+            erro
+        );
+
+        tabelaHistorico.innerHTML=`
+            <tr>
+                <td colspan="6">
+                    Erro ao carregar o histórico.
+                </td>
+            </tr>
+        `;
+    }
+}
+
+/* 16. PRIMEIRA BUSCA DO HISTÓRICO */
+buscarHistorico();
