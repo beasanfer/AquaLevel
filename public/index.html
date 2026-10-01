@@ -121,9 +121,7 @@
             <div class="bomba-info">
                 <div>
                     <span>Acionamento</span>
-                    <strong id="acionamentoBomba">
-                        Automático
-                    </strong>
+                    <strong id="acionamentoBomba">Automático</strong>
                 </div>
             </div>
         </article>
@@ -174,10 +172,7 @@
 
                 <div>
                     <label>Nível mínimo</label>
-
-                    <h2>
-                        <span id="minValue">30</span>%
-                    </h2>
+                    <h2><span id="minValue">30</span>%</h2>
 
                     <input
                         id="minimo"
@@ -195,10 +190,7 @@
 
                 <div>
                     <label>Nível máximo</label>
-
-                    <h2>
-                        <span id="maxValue">90</span>%
-                    </h2>
+                    <h2><span id="maxValue">90</span>%</h2>
 
                     <input
                         id="maximo"
@@ -217,39 +209,11 @@
         </article>
 
         <article class="card">
-
             <h3>ALERTAS ATIVOS</h3>
 
             <div id="alertas">
-
-                <div class="alert danger">
-                    ⚠
-
-                    <div>
-                        <strong>Nível crítico</strong>
-
-                        <p>
-                            Nível abaixo do mínimo configurado.
-                        </p>
-                    </div>
-                </div>
-
-                <div class="alert warning">
-                    ⚠
-
-                    <div>
-                        <strong>
-                            Falha na leitura do sensor
-                        </strong>
-
-                        <p>
-                            Leitura inconsistente detectada.
-                        </p>
-                    </div>
-                </div>
-
+                <p>Carregando alertas...</p>
             </div>
-
         </article>
 
     </section>
@@ -258,13 +222,11 @@
     <section class="grid-bottom">
 
         <article class="card">
-
             <h3>HISTÓRICO DO NÍVEL</h3>
 
             <canvas id="graficoNivel"></canvas>
 
             <div class="statistics">
-
                 <div>
                     Nível médio
                     <strong>58%</strong>
@@ -284,13 +246,10 @@
                     Consumo estimado
                     <strong>280 litros</strong>
                 </div>
-
             </div>
-
         </article>
 
         <article class="card">
-
             <h3>ÚLTIMOS EVENTOS</h3>
 
             <div id="eventos">
@@ -299,7 +258,6 @@
                 <p>⚠ Falha na leitura do sensor</p>
                 <p>ⓘ Modo alterado para automático</p>
             </div>
-
         </article>
 
     </section>
@@ -312,21 +270,16 @@
     <header>
         <div>
             <h1>Histórico</h1>
-
-            <p>
-                Histórico de medições e eventos do reservatório
-            </p>
+            <p>Histórico de medições e eventos do reservatório</p>
         </div>
     </header>
 
     <section class="page-grid">
-
         <article class="card">
 
             <h3>HISTÓRICO DE MEDIÇÕES</h3>
 
             <div class="table-container">
-
                 <table>
 
                     <thead>
@@ -349,11 +302,9 @@
                     </tbody>
 
                 </table>
-
             </div>
 
         </article>
-
     </section>
 
 </main>
@@ -364,55 +315,20 @@
     <header>
         <div>
             <h1>Alertas</h1>
-
-            <p>
-                Acompanhamento dos alertas emitidos pelo sistema
-            </p>
+            <p>Acompanhamento dos alertas emitidos pelo sistema</p>
         </div>
     </header>
 
     <section class="page-grid">
-
         <article class="card">
 
             <h3>ALERTAS DO SISTEMA</h3>
 
-            <div class="alert danger">
-                ⚠
-
-                <div>
-                    <strong>Nível crítico</strong>
-
-                    <p>
-                        O nível do reservatório ficou abaixo do mínimo configurado.
-                    </p>
-
-                    <small>
-                        15/09/2026 • 14:32
-                    </small>
-                </div>
-            </div>
-
-            <div class="alert warning">
-                ⚠
-
-                <div>
-                    <strong>
-                        Falha na leitura do sensor
-                    </strong>
-
-                    <p>
-                        Foi detectada uma leitura inconsistente do sensor ultrassônico.
-                    </p>
-
-                    <small>
-                        15/09/2026 • 12:18
-                    </small>
-                </div>
+            <div id="listaAlertas">
+                <p>Carregando alertas...</p>
             </div>
 
         </article>
-
     </section>
 
 </main>
@@ -423,69 +339,42 @@
     <header>
         <div>
             <h1>Configurações</h1>
-
-            <p>
-                Parâmetros de funcionamento do AquaLevel
-            </p>
+            <p>Parâmetros de funcionamento do AquaLevel</p>
         </div>
     </header>
 
     <section class="config-grid">
 
         <article class="card">
-
             <h3>LIMITES DO RESERVATÓRIO</h3>
 
             <div class="config-item">
                 <label>Nível mínimo</label>
-
-                <p>
-                    Define o nível para acionamento automático da bomba.
-                </p>
-
+                <p>Define o nível para acionamento automático da bomba.</p>
                 <strong>30%</strong>
             </div>
 
             <div class="config-item">
                 <label>Nível máximo</label>
-
-                <p>
-                    Define o nível para desligamento automático da bomba.
-                </p>
-
+                <p>Define o nível para desligamento automático da bomba.</p>
                 <strong>90%</strong>
             </div>
 
             <div class="config-item">
                 <label>Histerese</label>
-
-                <p>
-                    Evita acionamentos repetidos próximos aos limites.
-                </p>
-
+                <p>Evita acionamentos repetidos próximos aos limites.</p>
                 <strong>5%</strong>
             </div>
-
         </article>
 
         <article class="card">
-
             <h3>MODO DE FUNCIONAMENTO</h3>
 
             <div class="config-item">
-
                 <label>Modo atual</label>
-
-                <p>
-                    Controle automático de acordo com os limites configurados.
-                </p>
-
-                <strong id="modoConfiguracao">
-                    Automático
-                </strong>
-
+                <p>Controle automático de acordo com os limites configurados.</p>
+                <strong id="modoConfiguracao">Automático</strong>
             </div>
-
         </article>
 
     </section>
@@ -498,10 +387,7 @@
     <header>
         <div>
             <h1>Relatórios</h1>
-
-            <p>
-                Resumo das informações registradas pelo sistema
-            </p>
+            <p>Resumo das informações registradas pelo sistema</p>
         </div>
     </header>
 
@@ -509,42 +395,26 @@
 
         <article class="card report-card">
             <span>Nível médio</span>
-
             <strong>58%</strong>
-
-            <p>
-                Média das medições registradas
-            </p>
+            <p>Média das medições registradas</p>
         </article>
 
         <article class="card report-card">
             <span>Nível máximo</span>
-
             <strong>95%</strong>
-
-            <p>
-                Maior nível registrado
-            </p>
+            <p>Maior nível registrado</p>
         </article>
 
         <article class="card report-card">
             <span>Nível mínimo</span>
-
             <strong>22%</strong>
-
-            <p>
-                Menor nível registrado
-            </p>
+            <p>Menor nível registrado</p>
         </article>
 
         <article class="card report-card">
             <span>Acionamentos</span>
-
             <strong>12</strong>
-
-            <p>
-                Acionamentos da bomba registrados
-            </p>
+            <p>Acionamentos da bomba registrados</p>
         </article>
 
     </section>
@@ -557,10 +427,7 @@
     <header>
         <div>
             <h1>Sobre</h1>
-
-            <p>
-                Informações sobre o sistema AquaLevel
-            </p>
+            <p>Informações sobre o sistema AquaLevel</p>
         </div>
     </header>
 
@@ -584,7 +451,6 @@
 
                 <div>
                     <strong>ESP32</strong>
-
                     <span>
                         Microcontrolador responsável pelo processamento
                         e comunicação Wi-Fi.
@@ -593,7 +459,6 @@
 
                 <div>
                     <strong>HC-SR04</strong>
-
                     <span>
                         Sensor ultrassônico utilizado para monitoramento
                         do nível da água.
@@ -602,7 +467,6 @@
 
                 <div>
                     <strong>Controle automático</strong>
-
                     <span>
                         Aciona e desliga a bomba conforme os limites configurados.
                     </span>
@@ -610,7 +474,6 @@
 
                 <div>
                     <strong>Dashboard Web</strong>
-
                     <span>
                         Permite acompanhar nível, bomba, alertas e histórico.
                     </span>

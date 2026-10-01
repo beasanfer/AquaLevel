@@ -24,6 +24,8 @@ const minValue=document.getElementById("minValue");
 const maxValue=document.getElementById("maxValue");
 const salvarLimites=document.getElementById("salvarLimites");
 const tabelaHistorico=document.getElementById("tabelaHistorico");
+const listaAlertas=document.getElementById("listaAlertas");
+const alertasDashboard=document.getElementById("alertas");
 
 /* 3. NAVEGAÇÃO */
 const navLinks=document.querySelectorAll(".nav-link");
@@ -46,6 +48,10 @@ navLinks.forEach(link=>{
 
         if(pageId==="historico"){
             buscarHistorico();
+        }
+
+        if(pageId==="alertas-page"){
+            buscarAlertas();
         }
 
         window.scrollTo(0,0);
@@ -108,16 +114,13 @@ function atualizarDashboard(){
 
 /* 5. LIGAR BOMBA */
 ligarBomba.addEventListener("click",async()=>{
-
     if(modo!=="manual"){
         alert("Controle disponível somente no modo manual.");
         return;
     }
 
     if(nivel>=maximo){
-        alert(
-            "A bomba não pode ser ligada. Limite máximo atingido."
-        );
+        alert("A bomba não pode ser ligada. Limite máximo atingido.");
         return;
     }
 
@@ -135,14 +138,11 @@ ligarBomba.addEventListener("click",async()=>{
         const dados=await resposta.json();
 
         if(!resposta.ok){
-            alert(
-                dados.erro||"Erro ao ligar a bomba."
-            );
+            alert(dados.erro||"Erro ao ligar a bomba.");
             return;
         }
 
         bombaLigada=true;
-
         atualizarDashboard();
 
     }catch(erro){
@@ -152,7 +152,6 @@ ligarBomba.addEventListener("click",async()=>{
 
 /* 6. DESLIGAR BOMBA */
 desligarBomba.addEventListener("click",async()=>{
-
     if(modo!=="manual"){
         alert("Controle disponível somente no modo manual.");
         return;
@@ -172,14 +171,11 @@ desligarBomba.addEventListener("click",async()=>{
         const dados=await resposta.json();
 
         if(!resposta.ok){
-            alert(
-                dados.erro||"Erro ao desligar a bomba."
-            );
+            alert(dados.erro||"Erro ao desligar a bomba.");
             return;
         }
 
         bombaLigada=false;
-
         atualizarDashboard();
 
     }catch(erro){
@@ -189,7 +185,6 @@ desligarBomba.addEventListener("click",async()=>{
 
 /* 7. MODO AUTOMÁTICO */
 btnAutomatico.addEventListener("click",async()=>{
-
     try{
         const resposta=await fetch("/api/modo",{
             method:"POST",
@@ -204,14 +199,11 @@ btnAutomatico.addEventListener("click",async()=>{
         const dados=await resposta.json();
 
         if(!resposta.ok){
-            alert(
-                dados.erro||"Erro ao alterar modo."
-            );
+            alert(dados.erro||"Erro ao alterar modo.");
             return;
         }
 
         modo="automatico";
-
         atualizarDashboard();
 
     }catch(erro){
@@ -221,7 +213,6 @@ btnAutomatico.addEventListener("click",async()=>{
 
 /* 8. MODO MANUAL */
 btnManual.addEventListener("click",async()=>{
-
     try{
         const resposta=await fetch("/api/modo",{
             method:"POST",
@@ -236,14 +227,11 @@ btnManual.addEventListener("click",async()=>{
         const dados=await resposta.json();
 
         if(!resposta.ok){
-            alert(
-                dados.erro||"Erro ao alterar modo."
-            );
+            alert(dados.erro||"Erro ao alterar modo.");
             return;
         }
 
         modo="manual";
-
         atualizarDashboard();
 
     }catch(erro){
@@ -262,14 +250,11 @@ inputMax.addEventListener("input",()=>{
 
 /* 10. SALVAR LIMITES */
 salvarLimites.addEventListener("click",async()=>{
-
     const novoMinimo=Number(inputMin.value);
     const novoMaximo=Number(inputMax.value);
 
     if(novoMinimo>=novoMaximo){
-        alert(
-            "O limite mínimo deve ser menor que o máximo."
-        );
+        alert("O limite mínimo deve ser menor que o máximo.");
         return;
     }
 
@@ -288,9 +273,7 @@ salvarLimites.addEventListener("click",async()=>{
         const dados=await resposta.json();
 
         if(!resposta.ok){
-            alert(
-                dados.erro||"Erro ao salvar limites."
-            );
+            alert(dados.erro||"Erro ao salvar limites.");
             return;
         }
 
@@ -352,14 +335,11 @@ const grafico=new Chart(ctx,{
 
 /* 12. BUSCAR DADOS DO SERVIDOR */
 async function buscarDados(){
-
     try{
         const resposta=await fetch("/api/status");
 
         if(!resposta.ok){
-            throw new Error(
-                "Erro ao buscar dados."
-            );
+            throw new Error("Erro ao buscar dados.");
         }
 
         const dados=await resposta.json();
@@ -379,10 +359,7 @@ async function buscarDados(){
         atualizarDashboard();
 
     }catch(erro){
-        console.error(
-            "Erro de comunicação:",
-            erro
-        );
+        console.error("Erro de comunicação:",erro);
     }
 }
 
@@ -394,7 +371,6 @@ buscarDados();
 
 /* 15. HISTÓRICO DE MEDIÇÕES - ISSUE #19 */
 async function buscarHistorico(){
-
     if(!tabelaHistorico){
         return;
     }
@@ -403,9 +379,7 @@ async function buscarHistorico(){
         const resposta=await fetch("/api/historico");
 
         if(!resposta.ok){
-            throw new Error(
-                "Erro ao buscar histórico."
-            );
+            throw new Error("Erro ao buscar histórico.");
         }
 
         const historico=await resposta.json();
@@ -413,7 +387,6 @@ async function buscarHistorico(){
         tabelaHistorico.innerHTML="";
 
         if(historico.length===0){
-
             tabelaHistorico.innerHTML=`
                 <tr>
                     <td colspan="6">
@@ -421,7 +394,6 @@ async function buscarHistorico(){
                     </td>
                 </tr>
             `;
-
             return;
         }
 
@@ -429,27 +401,20 @@ async function buscarHistorico(){
             .slice()
             .reverse()
             .forEach(registro=>{
+                const dataHora=new Date(registro.dataHora);
 
-                const dataHora=
-                    new Date(registro.dataHora);
+                const data=dataHora.toLocaleDateString("pt-BR");
 
-                const data=
-                    dataHora.toLocaleDateString(
-                        "pt-BR"
-                    );
+                const hora=dataHora.toLocaleTimeString(
+                    "pt-BR",
+                    {
+                        hour:"2-digit",
+                        minute:"2-digit",
+                        second:"2-digit"
+                    }
+                );
 
-                const hora=
-                    dataHora.toLocaleTimeString(
-                        "pt-BR",
-                        {
-                            hour:"2-digit",
-                            minute:"2-digit",
-                            second:"2-digit"
-                        }
-                    );
-
-                const linha=
-                    document.createElement("tr");
+                const linha=document.createElement("tr");
 
                 linha.innerHTML=`
                     <td>${data}</td>
@@ -460,13 +425,10 @@ async function buscarHistorico(){
                     <td>-</td>
                 `;
 
-                tabelaHistorico.appendChild(
-                    linha
-                );
+                tabelaHistorico.appendChild(linha);
             });
 
     }catch(erro){
-
         console.error(
             "Erro ao carregar histórico:",
             erro
@@ -484,3 +446,116 @@ async function buscarHistorico(){
 
 /* 16. PRIMEIRA BUSCA DO HISTÓRICO */
 buscarHistorico();
+
+/* 17. ALERTAS - ISSUE #21 */
+function criarAlertaHTML(alerta,mostrarData=false){
+    const dataHora=new Date(alerta.dataHora);
+
+    const data=dataHora.toLocaleDateString("pt-BR");
+
+    const hora=dataHora.toLocaleTimeString(
+        "pt-BR",
+        {
+            hour:"2-digit",
+            minute:"2-digit",
+            second:"2-digit"
+        }
+    );
+
+    const titulo=
+        alerta.tipo==="nivel_critico"
+            ?"Nível crítico"
+            :alerta.tipo;
+
+    const nivelTexto=
+        alerta.nivel!==undefined
+            ?` Nível registrado: ${alerta.nivel}%.`
+            :"";
+
+    return `
+        <div class="alert danger">
+            ⚠
+            <div>
+                <strong>${titulo}</strong>
+                <p>${alerta.mensagem}${nivelTexto}</p>
+                ${
+                    mostrarData
+                        ?`<small>${data} • ${hora}</small>`
+                        :""
+                }
+            </div>
+        </div>
+    `;
+}
+
+async function buscarAlertas(){
+    try{
+        const resposta=await fetch("/api/alertas");
+
+        if(!resposta.ok){
+            throw new Error("Erro ao buscar alertas.");
+        }
+
+        const alertas=await resposta.json();
+
+        if(listaAlertas){
+            listaAlertas.innerHTML="";
+        }
+
+        if(alertasDashboard){
+            alertasDashboard.innerHTML="";
+        }
+
+        if(alertas.length===0){
+            if(listaAlertas){
+                listaAlertas.innerHTML=
+                    "<p>Nenhum alerta registrado.</p>";
+            }
+
+            if(alertasDashboard){
+                alertasDashboard.innerHTML=
+                    "<p>Nenhum alerta ativo.</p>";
+            }
+
+            return;
+        }
+
+        const alertasOrdenados=
+            alertas.slice().reverse();
+
+        if(listaAlertas){
+            alertasOrdenados.forEach(alerta=>{
+                listaAlertas.innerHTML+=
+                    criarAlertaHTML(alerta,true);
+            });
+        }
+
+        if(alertasDashboard){
+            alertasOrdenados
+                .slice(0,2)
+                .forEach(alerta=>{
+                    alertasDashboard.innerHTML+=
+                        criarAlertaHTML(alerta,false);
+                });
+        }
+
+    }catch(erro){
+        console.error(
+            "Erro ao carregar alertas:",
+            erro
+        );
+
+        if(listaAlertas){
+            listaAlertas.innerHTML=
+                "<p>Erro ao carregar os alertas.</p>";
+        }
+
+        if(alertasDashboard){
+            alertasDashboard.innerHTML=
+                "<p>Erro ao carregar os alertas.</p>";
+        }
+    }
+}
+
+/* 18. PRIMEIRA BUSCA DOS ALERTAS */
+buscarAlertas();
