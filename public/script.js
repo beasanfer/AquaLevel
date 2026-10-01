@@ -1,13 +1,16 @@
 /* Monitoramento do nível de água - AquaLevel */
 
 /* 1. VARIÁVEIS */
+
 let modo="automatico";
 let nivel=72;
 let bombaLigada=true;
 let minimo=30;
 let maximo=90;
 
+
 /* 2. ELEMENTOS HTML */
+
 const percentual=document.getElementById("percentual");
 const litros=document.getElementById("litros");
 const agua=document.getElementById("agua");
@@ -28,16 +31,21 @@ const listaAlertas=document.getElementById("listaAlertas");
 const alertasDashboard=document.getElementById("alertas");
 
 /* ISSUE #23 */
+
 const minimoConfiguracao=document.getElementById("minimoConfiguracao");
 const maximoConfiguracao=document.getElementById("maximoConfiguracao");
 const modoConfiguracao=document.getElementById("modoConfiguracao");
 
+
 /* 3. NAVEGAÇÃO */
+
 const navLinks=document.querySelectorAll(".nav-link");
 const pages=document.querySelectorAll(".page");
 
 navLinks.forEach(link=>{
+
     link.addEventListener("click",()=>{
+
         const pageId=link.dataset.page;
 
         pages.forEach(page=>{
@@ -63,12 +71,21 @@ navLinks.forEach(link=>{
             buscarDados();
         }
 
+        if(pageId==="dashboard"){
+            atualizarGrafico();
+        }
+
         window.scrollTo(0,0);
+
     });
+
 });
 
+
 /* 4. ATUALIZAR INTERFACE */
+
 function atualizarDashboard(){
+
     percentual.textContent=nivel+"%";
     litros.textContent=nivel*10+" litros";
     agua.style.height=nivel+"%";
@@ -84,32 +101,45 @@ function atualizarDashboard(){
     const nivelStatus=document.getElementById("nivelStatus");
 
     if(nivel<minimo){
+
         nivelStatus.textContent="Nível crítico";
         nivelStatus.parentElement.style.color="#c92d2d";
+
     }else if(nivel>=maximo){
+
         nivelStatus.textContent="Nível máximo";
         nivelStatus.parentElement.style.color="#0877e8";
+
     }else{
+
         nivelStatus.textContent="Nível normal";
         nivelStatus.parentElement.style.color="#29a45d";
+
     }
 
     if(modo==="automatico"){
+
         btnAutomatico.classList.add("active-mode");
         btnManual.classList.remove("active-mode");
+
     }else{
+
         btnManual.classList.add("active-mode");
         btnAutomatico.classList.remove("active-mode");
+
     }
 
     const acionamentoBomba=document.getElementById("acionamentoBomba");
 
     if(acionamentoBomba){
+
         acionamentoBomba.textContent=
             modo==="automatico"?"Automático":"Manual";
+
     }
 
     /* ISSUE #23 - CONFIGURAÇÕES */
+
     if(minimoConfiguracao){
         minimoConfiguracao.textContent=minimo+"%";
     }
@@ -119,29 +149,41 @@ function atualizarDashboard(){
     }
 
     if(modoConfiguracao){
+
         modoConfiguracao.textContent=
             modo==="automatico"?"Automático":"Manual";
+
     }
 
     ligarBomba.disabled=modo!=="manual";
     desligarBomba.disabled=modo!=="manual";
+
 }
 
+
 /* 5. LIGAR BOMBA */
+
 ligarBomba.addEventListener("click",async()=>{
+
     if(modo!=="manual"){
+
         alert("Controle disponível somente no modo manual.");
         return;
+
     }
 
     if(nivel>=maximo){
+
         alert(
             "A bomba não pode ser ligada. Limite máximo atingido."
         );
+
         return;
+
     }
 
     try{
+
         const resposta=await fetch("/api/bomba",{
             method:"POST",
             headers:{
@@ -155,28 +197,40 @@ ligarBomba.addEventListener("click",async()=>{
         const dados=await resposta.json();
 
         if(!resposta.ok){
+
             alert(
                 dados.erro||"Erro ao ligar a bomba."
             );
+
             return;
+
         }
 
         bombaLigada=true;
         atualizarDashboard();
 
     }catch(erro){
+
         console.error("Erro:",erro);
+
     }
+
 });
 
+
 /* 6. DESLIGAR BOMBA */
+
 desligarBomba.addEventListener("click",async()=>{
+
     if(modo!=="manual"){
+
         alert("Controle disponível somente no modo manual.");
         return;
+
     }
 
     try{
+
         const resposta=await fetch("/api/bomba",{
             method:"POST",
             headers:{
@@ -190,23 +244,33 @@ desligarBomba.addEventListener("click",async()=>{
         const dados=await resposta.json();
 
         if(!resposta.ok){
+
             alert(
                 dados.erro||"Erro ao desligar a bomba."
             );
+
             return;
+
         }
 
         bombaLigada=false;
         atualizarDashboard();
 
     }catch(erro){
+
         console.error("Erro:",erro);
+
     }
+
 });
 
+
 /* 7. MODO AUTOMÁTICO */
+
 btnAutomatico.addEventListener("click",async()=>{
+
     try{
+
         const resposta=await fetch("/api/modo",{
             method:"POST",
             headers:{
@@ -220,23 +284,33 @@ btnAutomatico.addEventListener("click",async()=>{
         const dados=await resposta.json();
 
         if(!resposta.ok){
+
             alert(
                 dados.erro||"Erro ao alterar modo."
             );
+
             return;
+
         }
 
         modo="automatico";
         atualizarDashboard();
 
     }catch(erro){
+
         console.error("Erro:",erro);
+
     }
+
 });
 
+
 /* 8. MODO MANUAL */
+
 btnManual.addEventListener("click",async()=>{
+
     try{
+
         const resposta=await fetch("/api/modo",{
             method:"POST",
             headers:{
@@ -250,42 +324,61 @@ btnManual.addEventListener("click",async()=>{
         const dados=await resposta.json();
 
         if(!resposta.ok){
+
             alert(
                 dados.erro||"Erro ao alterar modo."
             );
+
             return;
+
         }
 
         modo="manual";
         atualizarDashboard();
 
     }catch(erro){
+
         console.error("Erro:",erro);
+
     }
+
 });
 
+
 /* 9. MOSTRAR LIMITES */
+
 inputMin.addEventListener("input",()=>{
+
     minValue.textContent=inputMin.value;
+
 });
 
 inputMax.addEventListener("input",()=>{
+
     maxValue.textContent=inputMax.value;
+
 });
 
+
 /* 10. SALVAR LIMITES */
+
 salvarLimites.addEventListener("click",async()=>{
+
     const novoMinimo=Number(inputMin.value);
     const novoMaximo=Number(inputMax.value);
 
     if(novoMinimo>=novoMaximo){
+
         alert(
             "O limite mínimo deve ser menor que o máximo."
         );
+
         return;
+
     }
 
     try{
+
         const resposta=await fetch("/api/limites",{
             method:"POST",
             headers:{
@@ -300,10 +393,13 @@ salvarLimites.addEventListener("click",async()=>{
         const dados=await resposta.json();
 
         if(!resposta.ok){
+
             alert(
                 dados.erro||"Erro ao salvar limites."
             );
+
             return;
+
         }
 
         minimo=novoMinimo;
@@ -314,63 +410,139 @@ salvarLimites.addEventListener("click",async()=>{
         alert("Limites atualizados.");
 
     }catch(erro){
+
         console.error("Erro:",erro);
+
     }
+
 });
 
-/* 11. GRÁFICO */
+
+/* 11. GRÁFICO - ISSUE #25 */
+
 const ctx=document.getElementById("graficoNivel");
 
 const grafico=new Chart(ctx,{
+
     type:"line",
 
     data:{
-        labels:[
-            "10:00",
-            "12:00",
-            "14:00",
-            "16:00",
-            "18:00",
-            "20:00"
-        ],
+
+        labels:[],
 
         datasets:[{
+
             label:"Nível da água (%)",
-            data:[
-                60,
-                52,
-                63,
-                70,
-                68,
-                72
-            ],
+            data:[],
             borderColor:"#0877e8",
             tension:0.3,
             fill:false
+
         }]
+
     },
 
     options:{
+
         responsive:true,
 
         scales:{
+
             y:{
                 min:0,
                 max:100
             }
+
         }
+
     }
+
 });
 
-/* 12. BUSCAR DADOS DO SERVIDOR */
-async function buscarDados(){
+
+/* ATUALIZAR GRÁFICO COM O HISTÓRICO */
+
+async function atualizarGrafico(){
+
     try{
+
+        const resposta=await fetch("/api/historico");
+
+        if(!resposta.ok){
+
+            throw new Error(
+                "Erro ao buscar dados do gráfico."
+            );
+
+        }
+
+        const historico=await resposta.json();
+
+        if(historico.length===0){
+
+            grafico.data.labels=[];
+            grafico.data.datasets[0].data=[];
+
+            grafico.update();
+
+            return;
+
+        }
+
+        /* Exibe as 20 medições mais recentes */
+
+        const registros=historico.slice(-20);
+
+        const horarios=registros.map(registro=>{
+
+            const dataHora=new Date(registro.dataHora);
+
+            return dataHora.toLocaleTimeString(
+                "pt-BR",
+                {
+                    hour:"2-digit",
+                    minute:"2-digit",
+                    second:"2-digit"
+                }
+            );
+
+        });
+
+        const niveis=registros.map(registro=>
+            Number(registro.nivel)
+        );
+
+        grafico.data.labels=horarios;
+        grafico.data.datasets[0].data=niveis;
+
+        grafico.update();
+
+    }catch(erro){
+
+        console.error(
+            "Erro ao atualizar gráfico:",
+            erro
+        );
+
+    }
+
+}
+
+
+/* 12. BUSCAR DADOS DO SERVIDOR */
+
+async function buscarDados(){
+
+    try{
+
         const resposta=await fetch("/api/status");
 
         if(!resposta.ok){
+
             throw new Error(
                 "Erro ao buscar dados."
             );
+
         }
 
         const dados=await resposta.json();
@@ -390,32 +562,51 @@ async function buscarDados(){
         atualizarDashboard();
 
     }catch(erro){
+
         console.error(
             "Erro de comunicação:",
             erro
         );
+
     }
+
 }
 
+
 /* 13. ATUALIZAÇÃO AUTOMÁTICA */
-setInterval(buscarDados,5000);
+
+setInterval(()=>{
+
+    buscarDados();
+    atualizarGrafico();
+
+},5000);
+
 
 /* 14. PRIMEIRA BUSCA */
+
 buscarDados();
+atualizarGrafico();
+
 
 /* 15. HISTÓRICO DE MEDIÇÕES - ISSUE #19 */
+
 async function buscarHistorico(){
+
     if(!tabelaHistorico){
         return;
     }
 
     try{
+
         const resposta=await fetch("/api/historico");
 
         if(!resposta.ok){
+
             throw new Error(
                 "Erro ao buscar histórico."
             );
+
         }
 
         const historico=await resposta.json();
@@ -423,6 +614,7 @@ async function buscarHistorico(){
         tabelaHistorico.innerHTML="";
 
         if(historico.length===0){
+
             tabelaHistorico.innerHTML=`
                 <tr>
                     <td colspan="6">
@@ -432,12 +624,14 @@ async function buscarHistorico(){
             `;
 
             return;
+
         }
 
         historico
             .slice()
             .reverse()
             .forEach(registro=>{
+
                 const dataHora=
                     new Date(registro.dataHora);
 
@@ -471,9 +665,11 @@ async function buscarHistorico(){
                 tabelaHistorico.appendChild(
                     linha
                 );
+
             });
 
     }catch(erro){
+
         console.error(
             "Erro ao carregar histórico:",
             erro
@@ -486,14 +682,21 @@ async function buscarHistorico(){
                 </td>
             </tr>
         `;
+
     }
+
 }
 
+
 /* 16. PRIMEIRA BUSCA DO HISTÓRICO */
+
 buscarHistorico();
 
+
 /* 17. ALERTAS - ISSUE #21 */
+
 function criarAlertaHTML(alerta,mostrarData=false){
+
     const dataHora=new Date(alerta.dataHora);
 
     const data=dataHora.toLocaleDateString("pt-BR");
@@ -531,16 +734,22 @@ function criarAlertaHTML(alerta,mostrarData=false){
             </div>
         </div>
     `;
+
 }
 
+
 async function buscarAlertas(){
+
     try{
+
         const resposta=await fetch("/api/alertas");
 
         if(!resposta.ok){
+
             throw new Error(
                 "Erro ao buscar alertas."
             );
+
         }
 
         const alertas=await resposta.json();
@@ -554,55 +763,78 @@ async function buscarAlertas(){
         }
 
         if(alertas.length===0){
+
             if(listaAlertas){
+
                 listaAlertas.innerHTML=
                     "<p>Nenhum alerta registrado.</p>";
+
             }
 
             if(alertasDashboard){
+
                 alertasDashboard.innerHTML=
                     "<p>Nenhum alerta ativo.</p>";
+
             }
 
             return;
+
         }
 
         const alertasOrdenados=
             alertas.slice().reverse();
 
         if(listaAlertas){
+
             alertasOrdenados.forEach(alerta=>{
+
                 listaAlertas.innerHTML+=
                     criarAlertaHTML(alerta,true);
+
             });
+
         }
 
         if(alertasDashboard){
+
             alertasOrdenados
                 .slice(0,2)
                 .forEach(alerta=>{
+
                     alertasDashboard.innerHTML+=
                         criarAlertaHTML(alerta,false);
+
                 });
+
         }
 
     }catch(erro){
+
         console.error(
             "Erro ao carregar alertas:",
             erro
         );
 
         if(listaAlertas){
+
             listaAlertas.innerHTML=
                 "<p>Erro ao carregar os alertas.</p>";
+
         }
 
         if(alertasDashboard){
+
             alertasDashboard.innerHTML=
                 "<p>Erro ao carregar os alertas.</p>";
+
         }
+
     }
+
 }
 
+
 /* 18. PRIMEIRA BUSCA DOS ALERTAS */
+
 buscarAlertas();
