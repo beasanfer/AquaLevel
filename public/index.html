@@ -71,10 +71,8 @@
         </div>
     </header>
 
-    <!-- PRIMEIRA LINHA -->
     <section class="grid-top">
 
-        <!-- NÍVEL -->
         <article class="card nivel-card">
             <h3>NÍVEL DO RESERVATÓRIO</h3>
 
@@ -108,7 +106,6 @@
             </div>
         </article>
 
-        <!-- BOMBA -->
         <article class="card bomba-card">
             <h3>BOMBA</h3>
 
@@ -126,7 +123,6 @@
             </div>
         </article>
 
-        <!-- MODO -->
         <article class="card modo-card">
             <h3>MODO DE OPERAÇÃO</h3>
 
@@ -143,7 +139,6 @@
             </p>
         </article>
 
-        <!-- CONTROLE -->
         <article class="card controle-card">
             <h3>CONTROLE RÁPIDO</h3>
 
@@ -295,9 +290,7 @@
 
                     <tbody id="tabelaHistorico">
                         <tr>
-                            <td colspan="6">
-                                Carregando histórico...
-                            </td>
+                            <td colspan="6">Carregando histórico...</td>
                         </tr>
                     </tbody>
 
@@ -351,13 +344,13 @@
             <div class="config-item">
                 <label>Nível mínimo</label>
                 <p>Define o nível para acionamento automático da bomba.</p>
-                <strong>30%</strong>
+                <strong id="minimoConfiguracao">--%</strong>
             </div>
 
             <div class="config-item">
                 <label>Nível máximo</label>
                 <p>Define o nível para desligamento automático da bomba.</p>
-                <strong>90%</strong>
+                <strong id="maximoConfiguracao">--%</strong>
             </div>
 
             <div class="config-item">
@@ -373,7 +366,7 @@
             <div class="config-item">
                 <label>Modo atual</label>
                 <p>Controle automático de acordo com os limites configurados.</p>
-                <strong id="modoConfiguracao">Automático</strong>
+                <strong id="modoConfiguracao">Carregando...</strong>
             </div>
         </article>
 
