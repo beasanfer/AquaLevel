@@ -1,4 +1,4 @@
-/* Monitoramento do nível de água - Issue #1 */
+/* Monitoramento do nível de água - AquaLevel */
 
 /* 1. VARIÁVEIS */
 let modo="automatico";
@@ -27,6 +27,11 @@ const tabelaHistorico=document.getElementById("tabelaHistorico");
 const listaAlertas=document.getElementById("listaAlertas");
 const alertasDashboard=document.getElementById("alertas");
 
+/* ISSUE #23 */
+const minimoConfiguracao=document.getElementById("minimoConfiguracao");
+const maximoConfiguracao=document.getElementById("maximoConfiguracao");
+const modoConfiguracao=document.getElementById("modoConfiguracao");
+
 /* 3. NAVEGAÇÃO */
 const navLinks=document.querySelectorAll(".nav-link");
 const pages=document.querySelectorAll(".page");
@@ -54,11 +59,15 @@ navLinks.forEach(link=>{
             buscarAlertas();
         }
 
+        if(pageId==="configuracoes"){
+            buscarDados();
+        }
+
         window.scrollTo(0,0);
     });
 });
 
-/* 4. ATUALIZAR DASHBOARD */
+/* 4. ATUALIZAR INTERFACE */
 function atualizarDashboard(){
     percentual.textContent=nivel+"%";
     litros.textContent=nivel*10+" litros";
@@ -100,8 +109,14 @@ function atualizarDashboard(){
             modo==="automatico"?"Automático":"Manual";
     }
 
-    const modoConfiguracao=
-        document.getElementById("modoConfiguracao");
+    /* ISSUE #23 - CONFIGURAÇÕES */
+    if(minimoConfiguracao){
+        minimoConfiguracao.textContent=minimo+"%";
+    }
+
+    if(maximoConfiguracao){
+        maximoConfiguracao.textContent=maximo+"%";
+    }
 
     if(modoConfiguracao){
         modoConfiguracao.textContent=
@@ -120,7 +135,9 @@ ligarBomba.addEventListener("click",async()=>{
     }
 
     if(nivel>=maximo){
-        alert("A bomba não pode ser ligada. Limite máximo atingido.");
+        alert(
+            "A bomba não pode ser ligada. Limite máximo atingido."
+        );
         return;
     }
 
@@ -138,7 +155,9 @@ ligarBomba.addEventListener("click",async()=>{
         const dados=await resposta.json();
 
         if(!resposta.ok){
-            alert(dados.erro||"Erro ao ligar a bomba.");
+            alert(
+                dados.erro||"Erro ao ligar a bomba."
+            );
             return;
         }
 
@@ -171,7 +190,9 @@ desligarBomba.addEventListener("click",async()=>{
         const dados=await resposta.json();
 
         if(!resposta.ok){
-            alert(dados.erro||"Erro ao desligar a bomba.");
+            alert(
+                dados.erro||"Erro ao desligar a bomba."
+            );
             return;
         }
 
@@ -199,7 +220,9 @@ btnAutomatico.addEventListener("click",async()=>{
         const dados=await resposta.json();
 
         if(!resposta.ok){
-            alert(dados.erro||"Erro ao alterar modo.");
+            alert(
+                dados.erro||"Erro ao alterar modo."
+            );
             return;
         }
 
@@ -227,7 +250,9 @@ btnManual.addEventListener("click",async()=>{
         const dados=await resposta.json();
 
         if(!resposta.ok){
-            alert(dados.erro||"Erro ao alterar modo.");
+            alert(
+                dados.erro||"Erro ao alterar modo."
+            );
             return;
         }
 
@@ -254,7 +279,9 @@ salvarLimites.addEventListener("click",async()=>{
     const novoMaximo=Number(inputMax.value);
 
     if(novoMinimo>=novoMaximo){
-        alert("O limite mínimo deve ser menor que o máximo.");
+        alert(
+            "O limite mínimo deve ser menor que o máximo."
+        );
         return;
     }
 
@@ -273,7 +300,9 @@ salvarLimites.addEventListener("click",async()=>{
         const dados=await resposta.json();
 
         if(!resposta.ok){
-            alert(dados.erro||"Erro ao salvar limites.");
+            alert(
+                dados.erro||"Erro ao salvar limites."
+            );
             return;
         }
 
@@ -339,7 +368,9 @@ async function buscarDados(){
         const resposta=await fetch("/api/status");
 
         if(!resposta.ok){
-            throw new Error("Erro ao buscar dados.");
+            throw new Error(
+                "Erro ao buscar dados."
+            );
         }
 
         const dados=await resposta.json();
@@ -359,7 +390,10 @@ async function buscarDados(){
         atualizarDashboard();
 
     }catch(erro){
-        console.error("Erro de comunicação:",erro);
+        console.error(
+            "Erro de comunicação:",
+            erro
+        );
     }
 }
 
@@ -379,7 +413,9 @@ async function buscarHistorico(){
         const resposta=await fetch("/api/historico");
 
         if(!resposta.ok){
-            throw new Error("Erro ao buscar histórico.");
+            throw new Error(
+                "Erro ao buscar histórico."
+            );
         }
 
         const historico=await resposta.json();
@@ -394,6 +430,7 @@ async function buscarHistorico(){
                     </td>
                 </tr>
             `;
+
             return;
         }
 
@@ -401,20 +438,26 @@ async function buscarHistorico(){
             .slice()
             .reverse()
             .forEach(registro=>{
-                const dataHora=new Date(registro.dataHora);
+                const dataHora=
+                    new Date(registro.dataHora);
 
-                const data=dataHora.toLocaleDateString("pt-BR");
+                const data=
+                    dataHora.toLocaleDateString(
+                        "pt-BR"
+                    );
 
-                const hora=dataHora.toLocaleTimeString(
-                    "pt-BR",
-                    {
-                        hour:"2-digit",
-                        minute:"2-digit",
-                        second:"2-digit"
-                    }
-                );
+                const hora=
+                    dataHora.toLocaleTimeString(
+                        "pt-BR",
+                        {
+                            hour:"2-digit",
+                            minute:"2-digit",
+                            second:"2-digit"
+                        }
+                    );
 
-                const linha=document.createElement("tr");
+                const linha=
+                    document.createElement("tr");
 
                 linha.innerHTML=`
                     <td>${data}</td>
@@ -425,7 +468,9 @@ async function buscarHistorico(){
                     <td>-</td>
                 `;
 
-                tabelaHistorico.appendChild(linha);
+                tabelaHistorico.appendChild(
+                    linha
+                );
             });
 
     }catch(erro){
@@ -493,7 +538,9 @@ async function buscarAlertas(){
         const resposta=await fetch("/api/alertas");
 
         if(!resposta.ok){
-            throw new Error("Erro ao buscar alertas.");
+            throw new Error(
+                "Erro ao buscar alertas."
+            );
         }
 
         const alertas=await resposta.json();
