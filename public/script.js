@@ -29,7 +29,7 @@ const salvarLimites=document.getElementById("salvarLimites");
 const tabelaHistorico=document.getElementById("tabelaHistorico");
 const listaAlertas=document.getElementById("listaAlertas");
 const alertasDashboard=document.getElementById("alertas");
-
+const eventosDashboard=document.getElementById("eventos");
 /* ISSUE #23 */
 
 const minimoConfiguracao=document.getElementById("minimoConfiguracao");
@@ -73,6 +73,7 @@ navLinks.forEach(link=>{
 
         if(pageId==="dashboard"){
             atualizarGrafico();
+            buscarUltimosEventos();
         }
 
         window.scrollTo(0,0);
@@ -578,7 +579,10 @@ async function buscarDados(){
 setInterval(()=>{
 
     buscarDados();
+
     atualizarGrafico();
+
+    buscarUltimosEventos();
 
 },5000);
 
@@ -587,7 +591,7 @@ setInterval(()=>{
 
 buscarDados();
 atualizarGrafico();
-
+buscarUltimosEventos();
 
 /* 15. HISTÓRICO DE MEDIÇÕES - ISSUE #19 */
 
@@ -838,3 +842,111 @@ async function buscarAlertas(){
 /* 18. PRIMEIRA BUSCA DOS ALERTAS */
 
 buscarAlertas();
+
+/* 19. ÚLTIMOS EVENTOS DA BOMBA - ISSUE #27 */
+
+
+function criarEventoBombaHTML(evento){
+
+    const dataHora=new Date(evento.dataHora);
+
+    const data=dataHora.toLocaleDateString("pt-BR");
+
+    const hora=dataHora.toLocaleTimeString(
+        "pt-BR",
+        {
+            hour:"2-digit",
+            minute:"2-digit",
+            second:"2-digit"
+        }
+    );
+
+    const estado=
+        evento.estado==="ligada"
+            ?"Bomba ligada"
+            :"Bomba desligada";
+
+    const icone=
+        evento.estado==="ligada"
+            ?"▶"
+            :"■";
+
+    const modoEvento=
+        evento.modo==="automatico"
+            ?"Automático"
+            :"Manual";
+
+    return `
+        <div class="evento-bomba">
+            <p>${icone} <strong>${estado}</strong></p>
+            <small>${data} • ${hora} • Modo: ${modoEvento}</small>
+        </div>
+    `;
+
+}
+
+
+async function buscarUltimosEventos(){
+
+    if(!eventosDashboard){
+
+        return;
+
+    }
+
+    try{
+
+        const resposta=await fetch("/api/historico-bomba");
+
+        if(!resposta.ok){
+
+            throw new Error(
+                "Erro ao buscar histórico da bomba."
+            );
+
+        }
+
+        const historicoBomba=await resposta.json();
+
+        eventosDashboard.innerHTML="";
+
+        if(historicoBomba.length===0){
+
+            eventosDashboard.innerHTML=
+                "<p>Nenhum acionamento da bomba registrado.</p>";
+
+            return;
+
+        }
+
+        const eventosOrdenados=
+            historicoBomba
+                .slice()
+                .sort(
+                    (a,b)=>
+                        new Date(b.dataHora)-
+                        new Date(a.dataHora)
+                );
+
+        eventosOrdenados
+            .slice(0,5)
+            .forEach(evento=>{
+
+                eventosDashboard.innerHTML+=
+                    criarEventoBombaHTML(evento);
+
+            });
+
+    }catch(erro){
+
+        console.error(
+            "Erro ao carregar eventos da bomba:",
+            erro
+        );
+
+        eventosDashboard.innerHTML=
+            "<p>Erro ao carregar os eventos da bomba.</p>";
+
+    }
+
+}
