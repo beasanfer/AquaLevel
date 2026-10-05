@@ -145,23 +145,23 @@ void acionarBomba(bool ligar) {
   if (RELE_ATIVO_EM_LOW) {
 
     digitalWrite(
-      RELE,
-      ligar ? LOW : HIGH
-    );
+                 RELE,
+                 ligar ? LOW : HIGH
+                );
 
   } else {
 
     digitalWrite(
-      RELE,
-      ligar ? HIGH : LOW
-    );
+                 RELE,
+                 ligar ? HIGH : LOW
+                );
   }
 
   // LED azul acompanha o estado da bomba
   digitalWrite(
-    LED_AZUL,
-    ligar ? HIGH : LOW
-  );
+               LED_AZUL,
+               ligar ? HIGH : LOW
+              );
 
   if (ligar) {
     Serial.println("Bomba LIGADA");
@@ -189,28 +189,28 @@ void desligarLeds() {
 void atualizarLedsNivel(float nivelAtual) {
 
   digitalWrite(
-    LED_VERMELHO,
-    nivelAtual < NIVEL_LED_VERMELHO ? HIGH : LOW
-  );
+               LED_VERMELHO,
+               nivelAtual < NIVEL_LED_VERMELHO ? HIGH : LOW
+              );
 
   digitalWrite(
-    LED_AMARELO,
-    (
-      nivelAtual >= NIVEL_LED_VERMELHO &&
-      nivelAtual < NIVEL_LED_VERDE
-    ) ? HIGH : LOW
-  );
+               LED_AMARELO,
+               (
+                nivelAtual >= NIVEL_LED_VERMELHO &&
+                nivelAtual < NIVEL_LED_VERDE
+               ) ? HIGH : LOW
+              );
 
   digitalWrite(
-    LED_VERDE,
-    nivelAtual >= NIVEL_LED_VERDE ? HIGH : LOW
-  );
+               LED_VERDE,
+               nivelAtual >= NIVEL_LED_VERDE ? HIGH : LOW
+              );
 
   // LED azul sempre acompanha a bomba
   digitalWrite(
-    LED_AZUL,
-    bombaLigada ? HIGH : LOW
-  );
+               LED_AZUL,
+               bombaLigada ? HIGH : LOW
+              );
 }
 
 // ===============================
@@ -224,15 +224,15 @@ void verificarCooldown() {
   }
 
   if (
-    millis() - tempoUltimoTimeout >=
-    COOLDOWN_BOMBA_MS
-  ) {
+      millis() - tempoUltimoTimeout >=
+      COOLDOWN_BOMBA_MS
+     ) {
 
     emCooldown = false;
 
     Serial.println(
-      "Cooldown terminado. Sistema liberado."
-    );
+                   "Cooldown terminado. Sistema liberado."
+                  );
   }
 }
 
@@ -247,9 +247,9 @@ void verificarTimeoutBomba() {
   }
 
   if (
-    millis() - tempoLigadaBomba >=
-    TIMEOUT_BOMBA_MS
-  ) {
+      millis() - tempoLigadaBomba >=
+      TIMEOUT_BOMBA_MS
+     ) {
 
     acionarBomba(false);
 
@@ -257,16 +257,16 @@ void verificarTimeoutBomba() {
     tempoUltimoTimeout = millis();
 
     Serial.println(
-      "ALERTA: timeout da bomba!"
-    );
+                   "ALERTA: timeout da bomba!"
+                  );
 
     Serial.println(
-      "Possivel bomba seca, entupimento ou falha."
-    );
+                   "Possivel bomba seca, entupimento ou falha."
+                  );
 
     Serial.println(
-      "Bomba desligada e sistema em cooldown."
-    );
+                   "Bomba desligada e sistema em cooldown."
+                  );
   }
 }
 
@@ -283,8 +283,8 @@ void controleAutomaticoLocal() {
   if (nivel < 0) {
 
     Serial.println(
-      "Falha na leitura do sensor."
-    );
+                   "Falha na leitura do sensor."
+                  );
 
     acionarBomba(false);
 
@@ -300,26 +300,26 @@ void controleAutomaticoLocal() {
 
   // Reservatório com nível baixo
   if (
-    !bombaLigada &&
-    nivel < NIVEL_LIGA_BOMBA
-  ) {
+      !bombaLigada &&
+      nivel < NIVEL_LIGA_BOMBA
+     ) {
 
     Serial.println(
-      "AUTOMATICO: Nivel baixo"
-    );
+                   "AUTOMATICO: Nivel baixo"
+                  );
 
     acionarBomba(true);
   }
 
   // Reservatório abastecido
   else if (
-    bombaLigada &&
-    nivel > NIVEL_DESLIGA_BOMBA
-  ) {
+           bombaLigada &&
+           nivel > NIVEL_DESLIGA_BOMBA
+          ) {
 
     Serial.println(
-      "AUTOMATICO: Nivel maximo atingido"
-    );
+                   "AUTOMATICO: Nivel maximo atingido"
+                  );
 
     acionarBomba(false);
   }
@@ -383,8 +383,8 @@ void setup() {
   IPAddress IP = WiFi.softAPIP();
 
   Serial.println(
-    "Rede local AquaLevel criada."
-  );
+                 "Rede local AquaLevel criada."
+                );
 
   Serial.print("Nome da rede: ");
   Serial.println(ssid);
@@ -395,12 +395,12 @@ void setup() {
   server.begin();
 
   Serial.println(
-    "Servidor web local iniciado."
-  );
+                 "Servidor web local iniciado."
+                );
 
   Serial.println(
-    "Controle automatico funciona independentemente do Wi-Fi."
-  );
+                 "Controle automatico funciona independentemente do Wi-Fi."
+                );
 }
 
 // ===============================
@@ -424,8 +424,8 @@ void loop() {
   if (distancia < 0) {
 
     Serial.println(
-      "Falha na leitura do HC-SR04."
-    );
+                   "Falha na leitura do HC-SR04."
+                  );
 
     acionarBomba(false);
 
@@ -457,18 +457,18 @@ void loop() {
     Serial.print("% | Bomba: ");
 
     Serial.print(
-      bombaLigada ?
-      "LIGADA" :
-      "DESLIGADA"
-    );
+                 bombaLigada ?
+                 "LIGADA" :
+                 "DESLIGADA"
+                );
 
     Serial.print(" | Modo: ");
 
     Serial.println(
-      modoAutomatico ?
-      "AUTOMATICO" :
-      "MANUAL"
-    );
+                   modoAutomatico ?
+                   "AUTOMATICO" :
+                   "MANUAL"
+                  );
   }
 
   // ==========================================
@@ -484,9 +484,9 @@ void loop() {
     unsigned long tempoInicio = millis();
 
     while (
-      client.connected() &&
-      millis() - tempoInicio < 1000
-    ) {
+           client.connected() &&
+           millis() - tempoInicio < 1000
+          ) {
 
       if (client.available()) {
 
@@ -501,10 +501,10 @@ void loop() {
           // ==================================
 
           if (
-            request.indexOf(
-              "GET /ligar"
-            ) >= 0
-          ) {
+              request.indexOf(
+                              "GET /ligar"
+                             ) >= 0
+             ) {
 
             modoAutomatico = false;
 
@@ -514,8 +514,8 @@ void loop() {
             Serial.println("MODO MANUAL");
 
             Serial.println(
-              "Bomba LIGADA pelo site"
-            );
+                           "Bomba LIGADA pelo site"
+                          );
           }
 
           // ==================================
@@ -523,10 +523,10 @@ void loop() {
           // ==================================
 
           if (
-            request.indexOf(
-              "GET /desligar"
-            ) >= 0
-          ) {
+              request.indexOf(
+                              "GET /desligar"
+                             ) >= 0
+             ) {
 
             modoAutomatico = false;
 
@@ -536,8 +536,8 @@ void loop() {
             Serial.println("MODO MANUAL");
 
             Serial.println(
-              "Bomba DESLIGADA pelo site"
-            );
+                           "Bomba DESLIGADA pelo site"
+                          );
           }
 
           // ==================================
@@ -545,25 +545,25 @@ void loop() {
           // ==================================
 
           if (
-            request.indexOf(
-              "GET /automatico"
-            ) >= 0
-          ) {
+              request.indexOf(
+                              "GET /automatico"
+                             ) >= 0
+             ) {
 
             modoAutomatico = true;
 
             Serial.println();
 
             Serial.println(
-              "MODO AUTOMATICO ATIVADO"
-            );
+                           "MODO AUTOMATICO ATIVADO"
+                          );
 
             distancia = medirDistancia();
 
             nivel =
               distanciaParaNivel(
-                distancia
-              );
+                                 distancia
+                                );
 
             controleAutomaticoLocal();
           }
@@ -573,110 +573,110 @@ void loop() {
           // ==================================
 
           client.println(
-            "HTTP/1.1 200 OK"
-          );
+                         "HTTP/1.1 200 OK"
+                        );
 
           client.println(
-            "Content-type:text/html"
-          );
+                         "Content-type:text/html"
+                        );
 
           client.println(
-            "Connection: close"
-          );
+                         "Connection: close"
+                        );
 
           client.println();
 
           client.println(
-            "<!DOCTYPE html>"
-          );
+                         "<!DOCTYPE html>"
+                        );
 
           client.println("<html>");
 
           client.println("<head>");
 
           client.println(
-            "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-          );
+                         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+                        );
 
           client.println(
-            "<meta http-equiv='refresh' content='3'>"
-          );
+                         "<meta http-equiv='refresh' content='3'>"
+                        );
 
           client.println(
-            "<title>AquaLevel ESP32</title>"
-          );
+                         "<title>AquaLevel ESP32</title>"
+                        );
 
           client.println("<style>");
 
           client.println("body {");
 
           client.println(
-            "font-family: Arial;"
-          );
+                         "font-family: Arial;"
+                        );
 
           client.println(
-            "text-align: center;"
-          );
+                         "text-align: center;"
+                        );
 
           client.println(
-            "background-color: #f2f2f2;"
-          );
+                         "background-color: #f2f2f2;"
+                        );
 
           client.println(
-            "padding: 30px;"
-          );
+                         "padding: 30px;"
+                        );
 
           client.println("}");
 
           client.println(".caixa {");
 
           client.println(
-            "background: white;"
-          );
+                         "background: white;"
+                        );
 
           client.println(
-            "padding: 25px;"
-          );
+                         "padding: 25px;"
+                        );
 
           client.println(
-            "border-radius: 15px;"
-          );
+                         "border-radius: 15px;"
+                        );
 
           client.println(
-            "max-width: 500px;"
-          );
+                         "max-width: 500px;"
+                        );
 
           client.println(
-            "margin: auto;"
-          );
+                         "margin: auto;"
+                        );
 
           client.println("}");
 
           client.println("button {");
 
           client.println(
-            "padding: 15px 25px;"
-          );
+                         "padding: 15px 25px;"
+                        );
 
           client.println(
-            "font-size: 17px;"
-          );
+                         "font-size: 17px;"
+                        );
 
           client.println(
-            "margin: 8px;"
-          );
+                         "margin: 8px;"
+                        );
 
           client.println(
-            "border-radius: 8px;"
-          );
+                         "border-radius: 8px;"
+                        );
 
           client.println(
-            "border: none;"
-          );
+                         "border: none;"
+                        );
 
           client.println(
-            "cursor: pointer;"
-          );
+                         "cursor: pointer;"
+                        );
 
           client.println("}");
 
@@ -687,56 +687,56 @@ void loop() {
           client.println("<body>");
 
           client.println(
-            "<div class='caixa'>"
-          );
+                         "<div class='caixa'>"
+                        );
 
           // ==================================
           // TÍTULO
           // ==================================
 
           client.println(
-            "<h1>AquaLevel</h1>"
-          );
+                         "<h1>AquaLevel</h1>"
+                        );
 
           // ==================================
           // NÍVEL
           // ==================================
 
           client.println(
-            "<h2>Nivel da agua</h2>"
-          );
+                         "<h2>Nivel da agua</h2>"
+                        );
 
           if (nivel >= 0) {
 
             client.print("<h1>");
 
             client.print(
-              nivel,
-              1
-            );
+                         nivel,
+                         1
+                        );
 
             client.println(
-              "%</h1>"
-            );
+                           "%</h1>"
+                          );
 
             client.print(
-              "<p>Distancia: "
-            );
+                         "<p>Distancia: "
+                        );
 
             client.print(
-              distancia,
-              1
-            );
+                         distancia,
+                         1
+                        );
 
             client.println(
-              " cm</p>"
-            );
+                           " cm</p>"
+                          );
 
           } else {
 
             client.println(
-              "<h2>Erro na leitura do sensor</h2>"
-            );
+                           "<h2>Erro na leitura do sensor</h2>"
+                          );
           }
 
           // ==================================
@@ -744,20 +744,20 @@ void loop() {
           // ==================================
 
           client.println(
-            "<h2>Modo de funcionamento</h2>"
-          );
+                         "<h2>Modo de funcionamento</h2>"
+                        );
 
           if (modoAutomatico) {
 
             client.println(
-              "<h2>MODO AUTOMATICO</h2>"
-            );
+                           "<h2>MODO AUTOMATICO</h2>"
+                          );
 
           } else {
 
             client.println(
-              "<h2>MODO MANUAL</h2>"
-            );
+                           "<h2>MODO MANUAL</h2>"
+                          );
           }
 
           // ==================================
@@ -765,20 +765,20 @@ void loop() {
           // ==================================
 
           client.println(
-            "<h2>Status da bomba</h2>"
-          );
+                         "<h2>Status da bomba</h2>"
+                        );
 
           if (bombaLigada) {
 
             client.println(
-              "<h2>BOMBA LIGADA</h2>"
-            );
+                           "<h2>BOMBA LIGADA</h2>"
+                          );
 
           } else {
 
             client.println(
-              "<h2>BOMBA DESLIGADA</h2>"
-            );
+                           "<h2>BOMBA DESLIGADA</h2>"
+                          );
           }
 
           // ==================================
@@ -788,8 +788,8 @@ void loop() {
           if (emCooldown) {
 
             client.println(
-              "<p>Protecao da bomba: COOLDOWN</p>"
-            );
+                           "<p>Protecao da bomba: COOLDOWN</p>"
+                          );
           }
 
           // ==================================
@@ -797,34 +797,34 @@ void loop() {
           // ==================================
 
           client.println(
-            "<a href='/ligar'>"
-          );
+                         "<a href='/ligar'>"
+                        );
 
           client.println(
-            "<button>LIGAR BOMBA</button>"
-          );
+                         "<button>LIGAR BOMBA</button>"
+                        );
 
           client.println("</a>");
 
           client.println(
-            "<a href='/desligar'>"
-          );
+                         "<a href='/desligar'>"
+                        );
 
           client.println(
-            "<button>DESLIGAR BOMBA</button>"
-          );
+                         "<button>DESLIGAR BOMBA</button>"
+                        );
 
           client.println("</a>");
 
           client.println("<br>");
 
           client.println(
-            "<a href='/automatico'>"
-          );
+                         "<a href='/automatico'>"
+                        );
 
           client.println(
-            "<button>MODO AUTOMATICO</button>"
-          );
+                         "<button>MODO AUTOMATICO</button>"
+                        );
 
           client.println("</a>");
 
@@ -838,18 +838,18 @@ void loop() {
           client.println("<hr>");
 
           client.println(
-            "<p>Endereco local:</p>"
-          );
+                         "<p>Endereco local:</p>"
+                        );
 
           client.print(
-            "<strong>http://"
-          );
+                       "<strong>http://"
+                      );
 
           client.print(IP);
 
           client.println(
-            "</strong>"
-          );
+                         "</strong>"
+                        );
 
           client.println("</div>");
           client.println("</body>");
