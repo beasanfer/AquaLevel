@@ -3,3 +3,10 @@ node_modules/
 .env
 .vscode/c_cpp_properties.json
 .pio/
+.vscode/settings.json
+
+.vscode/launch.json
+.vscode/extensions.json
+
+.vscode/launch.json
+.vscode/extensions.json
