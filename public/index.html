@@ -15,7 +15,6 @@
 <nav class="topbar">
     <div class="brand">
         <h2>AquaLevel</h2>
-        <span>Automação e Controle Inteligente de Reservatórios</span>
     </div>
 
     <div class="menu">
@@ -48,6 +47,39 @@
             <img src="./icons/informacao.png" alt="">
             Sobre
         </a>
+    </div>
+
+    <!-- ACESSIBILIDADE -->
+    <div class="accessibility" aria-label="Controles de acessibilidade">
+
+        <button
+            id="diminuirFonte"
+            class="access-btn"
+            type="button"
+            aria-label="Diminuir tamanho da fonte"
+            title="Diminuir fonte">
+            A−
+        </button>
+
+        <button
+            id="aumentarFonte"
+            class="access-btn"
+            type="button"
+            aria-label="Aumentar tamanho da fonte"
+            title="Aumentar fonte">
+            A+
+        </button>
+
+        <button
+            id="alternarContraste"
+            class="access-btn contrast-btn"
+            type="button"
+            aria-pressed="false"
+            aria-label="Ativar ou desativar alto contraste"
+            title="Ativar alto contraste">
+            ◐ Contraste
+        </button>
+
     </div>
 
     <div class="connection">
@@ -175,7 +207,7 @@
                         min="0"
                         max="100"
                         value="30"
-                    >
+                        aria-label="Nível mínimo">
                 </div>
 
                 <div>
@@ -193,7 +225,7 @@
                         min="0"
                         max="100"
                         value="90"
-                    >
+                        aria-label="Nível máximo">
                 </div>
 
             </div>
@@ -287,7 +319,9 @@
 
                     <tbody id="tabelaHistorico">
                         <tr>
-                            <td colspan="6">Carregando histórico...</td>
+                            <td colspan="6">
+                                Carregando histórico...
+                            </td>
                         </tr>
                     </tbody>
 
@@ -340,19 +374,25 @@
 
             <div class="config-item">
                 <label>Nível mínimo</label>
-                <p>Define o nível para acionamento automático da bomba.</p>
+                <p>
+                    Define o nível para acionamento automático da bomba.
+                </p>
                 <strong id="minimoConfiguracao">--%</strong>
             </div>
 
             <div class="config-item">
                 <label>Nível máximo</label>
-                <p>Define o nível para desligamento automático da bomba.</p>
+                <p>
+                    Define o nível para desligamento automático da bomba.
+                </p>
                 <strong id="maximoConfiguracao">--%</strong>
             </div>
 
             <div class="config-item">
                 <label>Histerese</label>
-                <p>Evita acionamentos repetidos próximos aos limites.</p>
+                <p>
+                    Evita acionamentos repetidos próximos aos limites.
+                </p>
                 <strong>5%</strong>
             </div>
         </article>
@@ -362,8 +402,12 @@
 
             <div class="config-item">
                 <label>Modo atual</label>
-                <p>Controle automático de acordo com os limites configurados.</p>
-                <strong id="modoConfiguracao">Carregando...</strong>
+                <p>
+                    Controle automático de acordo com os limites configurados.
+                </p>
+                <strong id="modoConfiguracao">
+                    Carregando...
+                </strong>
             </div>
         </article>
 

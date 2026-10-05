@@ -36,6 +36,92 @@ const minimoConfiguracao=document.getElementById("minimoConfiguracao");
 const maximoConfiguracao=document.getElementById("maximoConfiguracao");
 const modoConfiguracao=document.getElementById("modoConfiguracao");
 
+ /* ACESSIBILIDADE */
+
+const diminuirFonte=document.getElementById("diminuirFonte");
+const aumentarFonte=document.getElementById("aumentarFonte");
+const alternarContraste=document.getElementById("alternarContraste");
+
+let tamanhoFonte=Number(
+    localStorage.getItem("aqualevelFonte")
+)||100;
+
+let contrasteAtivo=
+    localStorage.getItem("aqualevelContraste")==="true";
+
+function aplicarAcessibilidade(){
+
+    document.documentElement.style.fontSize=
+        tamanhoFonte+"%";
+
+    document.body.classList.toggle(
+        "alto-contraste",
+        contrasteAtivo
+    );
+
+    alternarContraste.setAttribute(
+        "aria-pressed",
+        String(contrasteAtivo)
+    );
+
+    alternarContraste.classList.toggle(
+        "ativo",
+        contrasteAtivo
+    );
+
+    alternarContraste.title=
+        contrasteAtivo
+            ?"Desativar alto contraste"
+            :"Ativar alto contraste";
+
+}
+
+diminuirFonte.addEventListener("click",()=>{
+
+    tamanhoFonte=Math.max(
+        85,
+        tamanhoFonte-10
+    );
+
+    localStorage.setItem(
+        "aqualevelFonte",
+        tamanhoFonte
+    );
+
+    aplicarAcessibilidade();
+
+});
+
+aumentarFonte.addEventListener("click",()=>{
+
+    tamanhoFonte=Math.min(
+        130,
+        tamanhoFonte+10
+    );
+
+    localStorage.setItem(
+        "aqualevelFonte",
+        tamanhoFonte
+    );
+
+    aplicarAcessibilidade();
+
+});
+
+alternarContraste.addEventListener("click",()=>{
+
+    contrasteAtivo=!contrasteAtivo;
+
+    localStorage.setItem(
+        "aqualevelContraste",
+        String(contrasteAtivo)
+    );
+
+    aplicarAcessibilidade();
+
+});
+
+aplicarAcessibilidade();
 
 /* 3. NAVEGAÇÃO */
 
