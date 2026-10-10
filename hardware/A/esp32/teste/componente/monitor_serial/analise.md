@@ -15,8 +15,12 @@ void loop() {
 
 ## Objetivo do Estudo
 
-Provar que o ESP32 consegue acessar o monitor serial
+Provar que o ESP32 consegue acessar o monitor serial.
 
 ## Critério
 
-ESP32 conseguir imprimir o texto previamente escolhido no monitor serial 
+ESP32 conseguir imprimir o texto previamente escolhido no monitor serial.
+
+## Resultado
+
+O código funcionou perfeitamente.

@@ -38,23 +38,23 @@ void loop() {
 
 ## Objeto de Estudo
 
-Testar o funcionamento dos LEDs externos usados no projeto (vermelho, amarelo, verde e azul)
+Testar o funcionamento dos LEDs externos usados no projeto (vermelho, amarelo, verde e azul).
 
 ## Materias
 
 Foi testado:
 
-- 3 LEDs vermelhos
-- 2 LEDs amarelo
-- 1 LED verde
-- 1 LED azul
-- 4 resistores de 200 ohms
+- 3 LEDs vermelhos;
+- 2 LEDs amarelo;
+- 1 LED verde;
+- 1 LED azul;
+- 4 resistores de 200 ohms.
 
 ## Critérios
 
-- Luzes das LEDs funcionando e emitindo bastante luz.
-- O posicionamento dos LEDs estão certos com a polarização
-- Os resistores tem a resistividade certa para o bom funcionamento dos LEDs
+- Luzes das LEDs funcionando e emitindo bastante luz;
+- O posicionamento dos LEDs estão certos com a polarização;
+- Os resistores tem a resistividade certa para o bom funcionamento dos LEDs.
 
 ## Resultados
 
@@ -64,4 +64,4 @@ Os outros LEDs vermelho e azul funcionaram como esperado.
 
 ## Possíveis Soluções
 
-- Trocar os resistores por resistores com menos resistividade para cores amarelo e verde
+- Trocar os resistores por resistores com menos resistividade para cores amarelo e verde.
