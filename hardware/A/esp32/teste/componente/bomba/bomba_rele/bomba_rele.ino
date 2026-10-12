@@ -1,4 +1,4 @@
-#define PINO_RELE 19  // Pino GPIO onde o relé está conectado
+#define PINO_RELE 19
 
 void setup() {
   Serial.begin(115200);
@@ -12,13 +12,12 @@ void setup() {
 }
 
 void loop() {
-  // Liga o relé
   Serial.println("Relé LIGADO");
   digitalWrite(PINO_RELE, HIGH);
-  delay(5000);  // 5 segundos
+  delay(5000);  // 5 s
 
   // Desliga o relé
   Serial.println("Relé DESLIGADO");
   digitalWrite(PINO_RELE, LOW);
-  delay(5000);  // 5 segundos
+  delay(5000);  // 5 s
 }

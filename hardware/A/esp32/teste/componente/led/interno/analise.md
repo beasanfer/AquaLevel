@@ -36,18 +36,18 @@ void loop() {
 }
 ```
 
-## Objetivo de Estudo
+## Objetivo do Estudo
 
 Verificar o funcionamento do LED interno da plataforma do ESP32.
 
-## Materiais
+## Material(is)
 
 - ESP32.
 
-## Critério
+## Critério(s)
 
 Acionamento do LED via código e seu brilho.
 
-## Resultados
+## Resultado(s)
 
 O LED está funcionando como o esperado.

@@ -1,6 +1,6 @@
 # Teste: Monitor Serial
 
-## Código:
+## Código
 
 ``` c++
 void setup() {
@@ -17,10 +17,10 @@ void loop() {
 
 Provar que o ESP32 consegue acessar o monitor serial.
 
-## Critério
+## Critério(s)
 
 ESP32 conseguir imprimir o texto previamente escolhido no monitor serial.
 
-## Resultado
+## Resultado(s)
 
 O código funcionou perfeitamente.

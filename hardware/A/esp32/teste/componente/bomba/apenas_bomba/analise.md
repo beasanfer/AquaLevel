@@ -1,20 +1,20 @@
 # Teste: Bomba `RS 385 DC 12 V`
 
-## Objeto de Estudo
+## Objetivo do Estudo
 
 Verificar o funcionamento da bomba.
 
-## Materiais
+## Material(is)
 
 - Bomba;
 - 2 Tubos;
 - 2 Recipiente.
 
-## Critério
+## Critério(s)
 
 - Acionamento da bomba;
 - Deslocamento adequado do fluxo de áqua nos tubos.
 
-## Resultados
+## Resultado(s)
 
 A bomba funciona perfeitamente.

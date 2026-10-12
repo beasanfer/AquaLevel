@@ -36,7 +36,7 @@ void loop() {
 }
 ```
 
-## Objeto de Estudo
+## Objetivo do Estudo
 
 Testar o funcionamento dos LEDs externos usados no projeto (vermelho, amarelo, verde e azul).
 
@@ -50,13 +50,13 @@ Foi testado:
 - 1 LED azul;
 - 4 resistores de 200 ohms.
 
-## Critérios
+## Critério(s)
 
 - Luzes das LEDs funcionando e emitindo bastante luz;
 - O posicionamento dos LEDs estão certos com a polarização;
 - Os resistores tem a resistividade certa para o bom funcionamento dos LEDs.
 
-## Resultados
+## Resultado(s)
 
 Verificou-se que um dos LED vermelho queimou antes dos teste; os dois LEDs amarelos, apesaram de estarem com suas luzes fracas, os LEDs amarelos; a mesma situação o LED verde.
 

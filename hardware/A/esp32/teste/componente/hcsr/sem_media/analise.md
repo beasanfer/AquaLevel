@@ -36,23 +36,23 @@ void loop() {
 }
 ```
 
-## Objeto de Estudo
+## Objetivo do Estudo
 
 Verificar o funcionamento do sensor HC-SR 04.
 
-## Materiais
+## Material(is)
 
 - ESP32;
 - HC-SR 04.
 
-## Critério
+## Critério(s)
 
 - Acionamento do HC-SR 04;
 - Impressão do resultado correto no monitor serial.
 
 ---
 
-## Resultados
+## Resultado(s)
 
 ### Resultado 1
 
