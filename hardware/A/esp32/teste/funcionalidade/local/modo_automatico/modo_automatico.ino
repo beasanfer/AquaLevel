@@ -127,9 +127,14 @@ void apagarLeds() {
 // Acende somente o LED correspondente ao estado atual
 void atualizarLedsNivel(float nivel) {
   EstadoNivel estado;
-  if (nivel < NIVEL_LED_VERMELHO)   estado = BAIXO;
-  else if (nivel < NIVEL_LED_VERDE) estado = MEDIO;
-  else                              estado = CHEIO;
+
+  if (nivel < NIVEL_LED_VERMELHO) {
+    estado = BAIXO;
+  } else if (nivel < NIVEL_LED_VERDE) {
+    estado = MEDIO;
+  } else {
+    estado = CHEIO;
+  }
 
   for (int i = 0; i < 3; i++) {
     digitalWrite(LEDS_NIVEL[i], i == estado ? HIGH : LOW);
