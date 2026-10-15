@@ -1,247 +1,198 @@
 #include <Arduino.h>
+#include <algorithm>
 
-/*
-Circuito
+/* ============================================================
+   CONTROLADOR DE NÍVEL COM ESP32
+   ------------------------------------------------------------
+   - Mede o nível do reservatório com HC-SR04
+   - Filtra as leituras com mediana para reduzir ruído
+   - Controla a bomba por histerese
+   - Mostra o estado em 4 LEDs
+   ============================================================ */
 
- HC-SR04:
-   TRIG  -> GPIO 13
-   ECHO  -> divisor de tensão (1k + 1,5k) -> GPIO 35
-            (divisor reduz 5V do sensor para ~3V, seguro para o ESP32)
-   VCC   -> 5V
-   GND   -> GND
 
- Relé:
-   IN    -> GPIO 19
-   VCC   -> 5V
-   GND   -> GND
-
- LEDs (com resistor de 220 ohm em série cada):
-   Vermelho -> GPIO 18  (nível < 25%)
-   Amarelo  -> GPIO 17  (25% <= nível < 70%)
-   Verde    -> GPIO 4   (nível >= 70%)
-   Azul     -> GPIO 16  (espelha o estado da bomba)
-*/
-
-/* =============== PINOS =================== */
+/* ==================== PINOS ==================== */
 
 #define PINO_TRIG       13
-#define PINO_ECHO       35   // input-only + divisor externo
+#define PINO_ECHO       35   // input-only, exige divisor de tensão
 #define PINO_RELE       19
 
-#define LED_VERMELHO    18
-#define LED_AMARELO     17
-#define LED_AZUL        16   // status da bomba
-#define LED_VERDE        4
+// LED da bomba (azul), separado dos LEDs de nível
+#define LED_BOMBA       16
+
+// LEDs de nível (a ordem importa: 0 = baixo, 1 = médio, 2 = cheio)
+const int LEDS_NIVEL[3] = { 18, 17, 4 };  // vermelho, amarelo, verde
 
 
-/* =========== VARIÁVEIS GLOBAIS =========== */
+/* ==================== CONFIGURAÇÃO ==================== */
 
-// Relé
-// false = ativo em HIGH, true = ativo em LOW
-const bool RELE_ATIVO_EM_LOW = false;
-// --------------------------------------------
+// Relé: true = liga em LOW, false = liga em HIGH
+const bool RELE_ATIVO_EM_LOW = true;
 
-// Reservatório
-// ajustar conforme o reservatório
-float DIST_VAZIO_CM = 40.0;  // distância do sensor até o fundo
-float DIST_CHEIO_CM = 10.0;  // distância do sensor até o nível cheio
-// --------------------------------------------
+// Reservatório: distância do sensor (em cm) para 0% e 100%
+const float DIST_VAZIO_CM = 26.0;   // sensor -> fundo
+const float DIST_CHEIO_CM = 10.0;   // sensor -> nível cheio
 
-// Bomba
-bool STATUS_BOMBA = false; // true = ligada, false = desliga
+// Histerese da bomba (em %)
+const float NIVEL_LIGA_BOMBA    = 25.0;
+const float NIVEL_DESLIGA_BOMBA = 90.0;
 
-// histerese da bomba
-float NIVEL_LIGA_BOMBA    = 25.0; // em %
-float NIVEL_DESLIGA_BOMBA = 90.0; // em %
+// Faixas dos LEDs de nível (em %)
+const float NIVEL_LED_VERMELHO = 25.0;
+const float NIVEL_LED_VERDE    = 70.0;
 
-// proteção por timeout
-unsigned long TIMEOUT_BOMBA_MS  = 2UL * 1000UL;  // 2 s
-unsigned long COOLDOWN_BOMBA_MS = 30UL * 1000UL; // 30 s
-
-// auxiliares
-unsigned long TEMPO_LIGADA_BOMBA = 0;
-unsigned long TEMPO_ULTIMO_TIMEOUT = 0;
-bool emCooldown = false;
-// --------------------------------------------
-
-// LEDs
-// faixas dos LEDs de nível
-float NIVEL_LED_VERMELHO = 25.0;  // < 25%  -> vermelho
-float NIVEL_LED_VERDE    = 70.0;  // >= 70% -> verde
-                                  // entre 25% e 70% -> amarelo
+// Filtro e cadência de leitura
+const int  NUM_AMOSTRAS      = 21;      // ímpar, quanto maior, mais estável
+const unsigned long INTERVALO_LEITURA_MS = 3000UL;
 
 
-/* =============== FUNÇÕES ================= */
+/* ==================== ESTADO ==================== */
 
-float medirDistanciaCm() {
+bool STATUS_BOMBA = false;
+unsigned long TEMPO_ULTIMA_LEITURA = 0;
+
+// Estados possíveis dos LEDs de nível
+enum EstadoNivel { BAIXO = 0, MEDIO = 1, CHEIO = 2 };
+
+
+/* ==================== MEDIÇÃO ==================== */
+
+// Faz uma leitura crua do HC-SR04. Retorna -1 se falhar.
+float lerDistanciaCrua() {
   digitalWrite(PINO_TRIG, LOW);
   delayMicroseconds(2);
-
   digitalWrite(PINO_TRIG, HIGH);
   delayMicroseconds(10);
   digitalWrite(PINO_TRIG, LOW);
 
   unsigned long duracao = pulseIn(PINO_ECHO, HIGH, 30000UL);
+  if (duracao == 0) return -1.0;
 
-  if (duracao == 0) {
-    return -1.0; // falha na leitura
-  }
-
-  // velocidade do som: 0,0343 cm/us
+  // velocidade do som: 0,0343 cm/us; divide por 2 (ida e volta)
   return (duracao * 0.0343) / 2.0;
 }
 
 
+// Tira várias amostras e devolve a mediana, descartando leituras inválidas.
+float lerDistanciaFiltrada() {
+  float leituras[NUM_AMOSTRAS];
+  int validas = 0;
+
+  for (int i = 0; i < NUM_AMOSTRAS; i++) {
+    float d = lerDistanciaCrua();
+    if (d > 0) leituras[validas++] = d;
+    delay(20);
+  }
+
+  if (validas == 0) return -1.0;
+
+  std::sort(leituras, leituras + validas);
+  return leituras[validas / 2];
+}
+
+
+// Converte distância (cm) em nível (%), com os limites da configuração.
 float distanciaParaNivel(float distancia) {
   if (distancia < 0) return -1.0;
 
   float nivel = (DIST_VAZIO_CM - distancia) /
     (DIST_VAZIO_CM - DIST_CHEIO_CM) * 100.0;
 
-  if (nivel < 0) nivel = 0;
+  if (nivel < 0)   nivel = 0;
   if (nivel > 100) nivel = 100;
-
   return nivel;
 }
 
 
+/* ==================== ATUADORES ==================== */
+
 void acionarBomba(bool ligar) {
   STATUS_BOMBA = ligar;
 
-  if (ligar) {
-    TEMPO_LIGADA_BOMBA = millis();
-  }
-
-  if (RELE_ATIVO_EM_LOW) {
-    digitalWrite(PINO_RELE, ligar ? LOW : HIGH);
-  } else {
-    digitalWrite(PINO_RELE, ligar ? HIGH : LOW);
-  }
-
-  // LED azul espelha o estado da bomba
-  digitalWrite(LED_AZUL, ligar ? HIGH : LOW);
+  digitalWrite(PINO_RELE, ligar == RELE_ATIVO_EM_LOW ? LOW : HIGH);
+  digitalWrite(LED_BOMBA, ligar ? HIGH : LOW);
 }
 
 
-void desligarLeds() {
-  digitalWrite(LED_VERMELHO, LOW);
-  digitalWrite(LED_AMARELO, LOW);
-  digitalWrite(LED_VERDE, LOW);
-  digitalWrite(LED_AZUL, LOW);
+// Apaga todos os LEDs de nível e o da bomba
+void apagarLeds() {
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(LEDS_NIVEL[i], LOW);
+  }
+
+  digitalWrite(LED_BOMBA, LOW);
 }
 
 
+// Acende somente o LED correspondente ao estado atual
 void atualizarLedsNivel(float nivel) {
-  // vermelho: nível crítico (bomba ligada ou prestes a ligar)
-  digitalWrite(LED_VERMELHO, nivel < NIVEL_LED_VERMELHO ? HIGH : LOW);
+  EstadoNivel estado;
+  if (nivel < NIVEL_LED_VERMELHO)   estado = BAIXO;
+  else if (nivel < NIVEL_LED_VERDE) estado = MEDIO;
+  else                              estado = CHEIO;
 
-  // amarelo: faixa intermediária
-  digitalWrite(LED_AMARELO,
-               (nivel >= NIVEL_LED_VERMELHO && nivel < NIVEL_LED_VERDE) ? HIGH : LOW);
-
-  // verde: reservatório abastecido
-  digitalWrite(LED_VERDE, nivel >= NIVEL_LED_VERDE ? HIGH : LOW);
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(LEDS_NIVEL[i], i == estado ? HIGH : LOW);
+  }
 }
 
 
-/* =============== COMEÇO ================== */
+/* ==================== SETUP ==================== */
+
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
   delay(1000);
 
   pinMode(PINO_TRIG, OUTPUT);
-  pinMode(PINO_ECHO, INPUT); // GPIO 35 é input-only
+  pinMode(PINO_ECHO, INPUT);
   pinMode(PINO_RELE, OUTPUT);
 
-  pinMode(LED_VERMELHO, OUTPUT);
-  pinMode(LED_AMARELO, OUTPUT);
-  pinMode(LED_AZUL, OUTPUT);
-  pinMode(LED_VERDE, OUTPUT);
+  for (int i = 0; i < 3; i++) {
+    pinMode(LEDS_NIVEL[i], OUTPUT);
+  }
+  pinMode(LED_BOMBA, OUTPUT);
 
   digitalWrite(PINO_TRIG, LOW);
-
-  acionarBomba(false); // já apaga o azul também
-  desligarLeds();
+  acionarBomba(false);
+  apagarLeds();
 
   Serial.println("Controlador de nivel com ESP32 iniciado.");
-  Serial.print("Timeout da bomba: ");
-  Serial.print(TIMEOUT_BOMBA_MS / 60000UL);
-  Serial.print(" s | Cooldown apos falha: ");
-  Serial.print(COOLDOWN_BOMBA_MS / 60000UL);
-  Serial.println(" s.");
-  Serial.println("LED azul = estado da bomba.");
+  Serial.println("Leitura filtrada a cada 3 segundos.");
 }
 
 
-/* =============== LÓGICA ================== */
-void loop() {
-  float distancia = medirDistanciaCm();
-  float nivel = distanciaParaNivel(distancia);
+/* ==================== LOOP ==================== */
 
+void loop() {
+  // Aguarda o intervalo entre leituras
+  if (millis() - TEMPO_ULTIMA_LEITURA < INTERVALO_LEITURA_MS) return;
+  TEMPO_ULTIMA_LEITURA = millis();
+
+  float distancia = lerDistanciaFiltrada();
+  float nivel     = distanciaParaNivel(distancia);
+
+  // Falha na leitura: desliga tudo por segurança
   if (distancia < 0) {
     Serial.println("Falha na leitura do HC-SR04.");
     acionarBomba(false);
-    desligarLeds();
-    delay(500);
+    apagarLeds();
     return;
   }
 
-  // verifica se o cooldown acabou
-  if (emCooldown) {
-    if (millis() - TEMPO_ULTIMO_TIMEOUT >= COOLDOWN_BOMBA_MS) {
-      emCooldown = false;
-      Serial.println("Cooldown terminado. Sistema liberado para nova tentativa.");
-    }
-  }
-
-  // verifica timeout da bomba
-  if (STATUS_BOMBA && (millis() - TEMPO_LIGADA_BOMBA >= TIMEOUT_BOMBA_MS)) {
+  // Controle da bomba com histerese
+  if (!STATUS_BOMBA && nivel < NIVEL_LIGA_BOMBA) {
+    acionarBomba(true);
+  } else if (STATUS_BOMBA && nivel > NIVEL_DESLIGA_BOMBA) {
     acionarBomba(false);
-    emCooldown = true;
-    TEMPO_ULTIMO_TIMEOUT = millis();
-
-    Serial.println("ALERTA: timeout da bomba!");
-    Serial.println("Possivel bomba seca, entupimento ou falha no sistema.");
-    Serial.print("Bomba desligada. Entrando em cooldown por ");
-    Serial.print(COOLDOWN_BOMBA_MS / 60000UL);
-    Serial.println(" segundos.");
   }
 
-  // controle da bomba com histerese (só se não estiver em cooldown)
-  if (!emCooldown) {
-    if (!STATUS_BOMBA && nivel < NIVEL_LIGA_BOMBA) {
-      acionarBomba(true);
-    }
-    else if (STATUS_BOMBA && nivel > NIVEL_DESLIGA_BOMBA) {
-      acionarBomba(false);
-    }
-  }
-
-  // LEDs de nível (vermelho/amarelo/verde)
   atualizarLedsNivel(nivel);
 
-  // log serial
+  // Log
   Serial.print("Distancia: ");
   Serial.print(distancia, 1);
   Serial.print(" cm | Nivel: ");
   Serial.print(nivel, 1);
   Serial.print(" % | Bomba: ");
-  Serial.print(STATUS_BOMBA ? "LIGADA" : "DESLIGADA");
-
-  if (STATUS_BOMBA) {
-    Serial.print(" (ha ");
-    Serial.print((millis() - TEMPO_LIGADA_BOMBA) / 1000UL);
-    Serial.print("s)");
-  }
-
-  if (emCooldown) {
-    unsigned long restante = (COOLDOWN_BOMBA_MS - (millis() - TEMPO_ULTIMO_TIMEOUT)) / 1000UL;
-    Serial.print(" [COOLDOWN: ");
-    Serial.print(restante);
-    Serial.print("s]");
-  }
-
-  Serial.println();
-
-  delay(300);
+  Serial.println(STATUS_BOMBA ? "LIGADA" : "DESLIGADA");
 }
