@@ -18,10 +18,10 @@
 #define PINO_RELE       19
 
 // LED da bomba (azul), separado dos LEDs de nível
-#define LED_BOMBA       16
+#define LED_BOMBA       4
 
 // LEDs de nível (a ordem importa: 0 = baixo, 1 = médio, 2 = cheio)
-const int LEDS_NIVEL[3] = { 18, 17, 4 };  // vermelho, amarelo, verde
+const int LEDS_NIVEL[3] = { 18, 17, 16 };  // vermelho, amarelo, verde
 
 
 /* ==================== CONFIGURAÇÃO ==================== */
