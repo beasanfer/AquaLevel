@@ -30,12 +30,12 @@ const int LEDS_NIVEL[3] = { 18, 17, 16 };  // vermelho, amarelo, verde
 const bool RELE_ATIVO_EM_LOW = true;
 
 // Reservatório: distância do sensor (em cm) para 0% e 100%
-const float DIST_VAZIO_CM = 26.0;   // sensor -> fundo
-const float DIST_CHEIO_CM = 10.0;   // sensor -> nível cheio
+const float DIST_VAZIO_CM = 23.0;   // sensor -> fundo
+const float DIST_CHEIO_CM = 13.0;   // sensor -> nível cheio
 
 // Histerese da bomba (em %)
 const float NIVEL_LIGA_BOMBA    = 25.0;
-const float NIVEL_DESLIGA_BOMBA = 90.0;
+const float NIVEL_DESLIGA_BOMBA = 95.0;
 
 // Faixas dos LEDs de nível (em %)
 const float NIVEL_LED_VERMELHO = 25.0;
