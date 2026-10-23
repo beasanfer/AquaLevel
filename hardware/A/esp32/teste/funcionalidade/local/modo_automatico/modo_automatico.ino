@@ -21,7 +21,7 @@
 #define LED_BOMBA       4
 
 // LEDs de nível (a ordem importa: 0 = baixo, 1 = médio, 2 = cheio)
-const int LEDS_NIVEL[3] = { 18, 17, 16 };  // vermelho, amarelo, verde
+const int LEDS_NIVEL[3] = {18, 17, 16};  // vermelho, amarelo, verde
 
 
 /* ==================== CONFIGURAÇÃO ==================== */
@@ -30,20 +30,21 @@ const int LEDS_NIVEL[3] = { 18, 17, 16 };  // vermelho, amarelo, verde
 const bool RELE_ATIVO_EM_LOW = true;
 
 // Reservatório: distância do sensor (em cm) para 0% e 100%
-const float DIST_VAZIO_CM = 23.0;   // sensor -> fundo
-const float DIST_CHEIO_CM = 13.0;   // sensor -> nível cheio
+float ALTURA_RESERVATORIO_CM = 23.0f; // fundo -> sensor
+float NIVEL_DESEJADO_CM      = 13.0f; // fundo -> nível desejado
 
 // Histerese da bomba (em %)
-const float NIVEL_LIGA_BOMBA    = 25.0;
-const float NIVEL_DESLIGA_BOMBA = 95.0;
+float NIVEL_LIGA_BOMBA    = 25.0f;
+float NIVEL_DESLIGA_BOMBA = 95.0f;
 
 // Faixas dos LEDs de nível (em %)
-const float NIVEL_LED_VERMELHO = 25.0;
-const float NIVEL_LED_VERDE    = 70.0;
+float NIVEL_LED_VERMELHO = 25.0f;
+float NIVEL_LED_VERDE    = 70.0f;
 
 // Filtro e cadência de leitura
-const int  NUM_AMOSTRAS      = 21;      // ímpar, quanto maior, mais estável
-const unsigned long INTERVALO_LEITURA_MS = 3000UL;
+const int NUMERO_AMOSTRAS = 7; //21 // ímpar, quanto maior, mais estável
+                               // manter baixo se a vazão é lenta
+const unsigned long INTERVALO_LEITURA_MS = 1000UL;
 
 
 /* ==================== ESTADO ==================== */
@@ -57,7 +58,18 @@ enum EstadoNivel { BAIXO = 0, MEDIO = 1, CHEIO = 2 };
 
 /* ==================== MEDIÇÃO ==================== */
 
-// Faz uma leitura crua do HC-SR04. Retorna -1 se falhar.
+unsigned long timeoutPulseIn() {
+  float tempo_us = (2.0f * ALTURA_RESERVATORIO_CM) / 0.0343f * 1.5f;
+
+  if (tempo_us < 3000.0f) {
+    tempo_us = 3000.0f; // piso mínimo seguro
+  }
+
+  return (unsigned long)tempo_us;
+}
+
+
+// Faz uma leitura crua do HC-SR04
 float lerDistanciaCrua() {
   digitalWrite(PINO_TRIG, LOW);
   delayMicroseconds(2);
@@ -65,23 +77,28 @@ float lerDistanciaCrua() {
   delayMicroseconds(10);
   digitalWrite(PINO_TRIG, LOW);
 
-  unsigned long duracao = pulseIn(PINO_ECHO, HIGH, 30000UL);
+  unsigned long duracao = pulseIn(PINO_ECHO, HIGH, timeoutPulseIn());
   if (duracao == 0) return -1.0;
 
-  // velocidade do som: 0,0343 cm/us; divide por 2 (ida e volta)
+  // velocidade do som: 0,0343 cm/us a 20°C; divide por 2 (ida e volta)
   return (duracao * 0.0343) / 2.0;
 }
 
 
 // Tira várias amostras e devolve a mediana, descartando leituras inválidas.
 float lerDistanciaFiltrada() {
-  float leituras[NUM_AMOSTRAS];
+  float leituras[NUMERO_AMOSTRAS];
   int validas = 0;
 
-  for (int i = 0; i < NUM_AMOSTRAS; i++) {
+  for (int i = 0; i < NUMERO_AMOSTRAS; i++) {
     float d = lerDistanciaCrua();
-    if (d > 0) leituras[validas++] = d;
-    delay(20);
+
+    if (d > 0) {
+      leituras[validas] = d;
+      ++validas;
+    }
+
+    if (i < NUMERO_AMOSTRAS - 1) delay(60);
   }
 
   if (validas == 0) return -1.0;
@@ -95,11 +112,12 @@ float lerDistanciaFiltrada() {
 float distanciaParaNivel(float distancia) {
   if (distancia < 0) return -1.0;
 
-  float nivel = (DIST_VAZIO_CM - distancia) /
-    (DIST_VAZIO_CM - DIST_CHEIO_CM) * 100.0;
+  float nivel =
+    (ALTURA_RESERVATORIO_CM - distancia) / NIVEL_DESEJADO_CM * 100.0;
 
   if (nivel < 0)   nivel = 0;
   if (nivel > 100) nivel = 100;
+
   return nivel;
 }
 
@@ -162,7 +180,7 @@ void setup() {
   apagarLeds();
 
   Serial.println("Controlador de nivel com ESP32 iniciado.");
-  Serial.println("Leitura filtrada a cada 3 segundos.");
+  Serial.println("Leitura filtrada a cada 1 segundo.");
 }
 
 
@@ -170,8 +188,12 @@ void setup() {
 
 void loop() {
   // Aguarda o intervalo entre leituras
-  if (millis() - TEMPO_ULTIMA_LEITURA < INTERVALO_LEITURA_MS) return;
-  TEMPO_ULTIMA_LEITURA = millis();
+  if (millis() - TEMPO_ULTIMA_LEITURA < INTERVALO_LEITURA_MS) {
+    delay(1); // evitar reinicialização por watchdog
+    return;   // não passou, volta
+  }
+
+  TEMPO_ULTIMA_LEITURA = millis(); // passou
 
   float distancia = lerDistanciaFiltrada();
   float nivel     = distanciaParaNivel(distancia);
