@@ -1,20 +1,10 @@
 #include <Arduino.h>
 #include <algorithm>
 
-/* ============================================================
-   CONTROLADOR DE NÍVEL COM ESP32
-   ------------------------------------------------------------
-   - Mede o nível do reservatório com HC-SR04
-   - Filtra as leituras com mediana para reduzir ruído
-   - Controla a bomba por histerese
-   - Mostra o estado em 4 LEDs
-   ============================================================ */
-
-
 /* ==================== PINOS ==================== */
 
 #define PINO_TRIG       13
-#define PINO_ECHO       35   // input-only, exige divisor de tensão
+#define PINO_ECHO       35 // input-only, exige divisor de tensão
 #define PINO_RELE       19
 
 // LED da bomba (azul), separado dos LEDs de nível
@@ -30,19 +20,19 @@ const int LEDS_NIVEL[3] = {18, 17, 16};  // vermelho, amarelo, verde
 const bool RELE_ATIVO_EM_LOW = true;
 
 // Reservatório: distância do sensor (em cm) para 0% e 100%
-float ALTURA_RESERVATORIO_CM = 23.0f; // fundo -> sensor
-float NIVEL_DESEJADO_CM      = 13.0f; // fundo -> nível desejado
+float ALTURA_RESERVATORIO_CM = 22.5f; // fundo -> sensor
+float NIVEL_DESEJADO_CM      = 5.0f;  // fundo -> nível desejado
 
 // Histerese da bomba (em %)
-float NIVEL_LIGA_BOMBA    = 25.0f;
-float NIVEL_DESLIGA_BOMBA = 95.0f;
+float NIVEL_LIGA_BOMBA    = 60.0f;
+float NIVEL_DESLIGA_BOMBA = 99.0f;
 
 // Faixas dos LEDs de nível (em %)
 float NIVEL_LED_VERMELHO = 25.0f;
 float NIVEL_LED_VERDE    = 70.0f;
 
 // Filtro e cadência de leitura
-const int NUMERO_AMOSTRAS = 7; //21 // ímpar, quanto maior, mais estável
+const int NUMERO_AMOSTRAS = 7; // 21 // ímpar, quanto maior, mais estável
                                // manter baixo se a vazão é lenta
 const unsigned long INTERVALO_LEITURA_MS = 1000UL;
 
@@ -59,13 +49,7 @@ enum EstadoNivel { BAIXO = 0, MEDIO = 1, CHEIO = 2 };
 /* ==================== MEDIÇÃO ==================== */
 
 unsigned long timeoutPulseIn() {
-  float tempo_us = (2.0f * ALTURA_RESERVATORIO_CM) / 0.0343f * 1.5f;
-
-  if (tempo_us < 3000.0f) {
-    tempo_us = 3000.0f; // piso mínimo seguro
-  }
-
-  return (unsigned long)tempo_us;
+  return 30000UL; // 30 ms
 }
 
 
@@ -201,8 +185,10 @@ void loop() {
   // Falha na leitura: desliga tudo por segurança
   if (distancia < 0) {
     Serial.println("Falha na leitura do HC-SR04.");
+
     acionarBomba(false);
     apagarLeds();
+
     return;
   }
 
