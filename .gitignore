@@ -1,15 +1,25 @@
+# Node
 node_modules/
+
+# macOS
 .DS_Store
+
+# Variáveis de ambiente
 .env
-.vscode/c_cpp_properties.json
+
+# PlatformIO
 .pio/
+
+# VS Code — configurações locais/pessoais
+.vscode/c_cpp_properties.json
+.vscode/extensions.json
+.vscode/launch.json
 .vscode/settings.json
 
-.vscode/launch.json
-.vscode/extensions.json
-
-.vscode/launch.json
-.vscode/extensions.json
-
-**/venv
-**/.venv
+# Python
+venv/
+.venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]

@@ -6,13 +6,13 @@ app.use(express.json());
 app.use(express.static("public"));
 
 let sistema = {
-    nivel: 72,
-    litros: 720,
-    bombaLigada: true,
-    modo: "automatico",
-    minimo: 30,
-    maximo: 90,
-    sensorOK: true
+  nivel: 72,
+  litros: 720,
+  bombaLigada: true,
+  modo: "automatico",
+  minimo: 30,
+  maximo: 90,
+  sensorOK: true,
 };
 
 /* HISTÓRICO DE MEDIÇÕES */
@@ -27,188 +27,188 @@ let nivelCriticoAtivo = false;
 
 /* REGISTRAR ALTERAÇÃO DE ESTADO DA BOMBA */
 function registrarAcionamento(novoEstado) {
-    if (sistema.bombaLigada !== novoEstado) {
-        sistema.bombaLigada = novoEstado;
+  if (sistema.bombaLigada !== novoEstado) {
+    sistema.bombaLigada = novoEstado;
 
-        historicoBomba.push({
-            estado: novoEstado ? "ligada" : "desligada",
-            modo: sistema.modo,
-            dataHora: new Date().toISOString()
-        });
-    }
+    historicoBomba.push({
+      estado: novoEstado ? "ligada" : "desligada",
+      modo: sistema.modo,
+      dataHora: new Date().toISOString(),
+    });
+  }
 }
 
 /* VERIFICAR NÍVEL CRÍTICO */
 function verificarNivelCritico() {
-    if (sistema.nivel <= sistema.minimo) {
-        if (!nivelCriticoAtivo) {
-            alertas.push({
-                tipo: "nivel_critico",
-                mensagem: "Nível de água crítico.",
-                nivel: sistema.nivel,
-                dataHora: new Date().toISOString()
-            });
+  if (sistema.nivel <= sistema.minimo) {
+    if (!nivelCriticoAtivo) {
+      alertas.push({
+        tipo: "nivel_critico",
+        mensagem: "Nível de água crítico.",
+        nivel: sistema.nivel,
+        dataHora: new Date().toISOString(),
+      });
 
-            nivelCriticoAtivo = true;
-        }
-    } else {
-        nivelCriticoAtivo = false;
+      nivelCriticoAtivo = true;
     }
+  } else {
+    nivelCriticoAtivo = false;
+  }
 }
 
 /* CONTROLE AUTOMÁTICO DA BOMBA */
 function controleAutomatico() {
-    if (!sistema.sensorOK) {
-        return;
-    }
+  if (!sistema.sensorOK) {
+    return;
+  }
 
-    if (sistema.nivel <= sistema.minimo) {
-        registrarAcionamento(true);
-    } else if (sistema.nivel >= sistema.maximo) {
-        registrarAcionamento(false);
-    }
+  if (sistema.nivel <= sistema.minimo) {
+    registrarAcionamento(true);
+  } else if (sistema.nivel >= sistema.maximo) {
+    registrarAcionamento(false);
+  }
 }
 
 /* ESP32 ENVIA LEITURA */
 app.post("/api/nivel", (req, res) => {
-    const nivel = Number(req.body.nivel);
-    const litros = Number(req.body.litros);
+  const nivel = Number(req.body.nivel);
+  const litros = Number(req.body.litros);
 
-    /* VALIDAR LEITURA DO SENSOR */
-    if (
-        req.body.nivel === undefined ||
-        req.body.nivel === null ||
-        req.body.nivel === "" ||
-        !Number.isFinite(nivel) ||
-        nivel < 0 ||
-        nivel > 100 ||
-        req.body.litros === undefined ||
-        req.body.litros === null ||
-        req.body.litros === "" ||
-        !Number.isFinite(litros) ||
-        litros < 0
-    ) {
-        sistema.sensorOK = false;
+  /* VALIDAR LEITURA DO SENSOR */
+  if (
+    req.body.nivel === undefined ||
+    req.body.nivel === null ||
+    req.body.nivel === "" ||
+    !Number.isFinite(nivel) ||
+    nivel < 0 ||
+    nivel > 100 ||
+    req.body.litros === undefined ||
+    req.body.litros === null ||
+    req.body.litros === "" ||
+    !Number.isFinite(litros) ||
+    litros < 0
+  ) {
+    sistema.sensorOK = false;
 
-        return res.status(400).json({
-            sucesso: false,
-            erro: "Leitura inválida do sensor."
-        });
-    }
-
-    /* SENSOR VOLTOU AO FUNCIONAMENTO NORMAL */
-    sistema.sensorOK = true;
-
-    sistema.nivel = nivel;
-    sistema.litros = litros;
-
-    /* REGISTRAR MEDIÇÃO NO HISTÓRICO */
-    historico.push({
-        nivel: sistema.nivel,
-        litros: sistema.litros,
-        dataHora: new Date().toISOString()
+    return res.status(400).json({
+      sucesso: false,
+      erro: "Leitura inválida do sensor.",
     });
+  }
 
-    /* VERIFICAR ALERTA DE NÍVEL CRÍTICO */
-    verificarNivelCritico();
+  /* SENSOR VOLTOU AO FUNCIONAMENTO NORMAL */
+  sistema.sensorOK = true;
 
-    if (sistema.modo === "automatico") {
-        controleAutomatico();
-    }
+  sistema.nivel = nivel;
+  sistema.litros = litros;
 
-    res.json({
-        sucesso: true
-    });
+  /* REGISTRAR MEDIÇÃO NO HISTÓRICO */
+  historico.push({
+    nivel: sistema.nivel,
+    litros: sistema.litros,
+    dataHora: new Date().toISOString(),
+  });
+
+  /* VERIFICAR ALERTA DE NÍVEL CRÍTICO */
+  verificarNivelCritico();
+
+  if (sistema.modo === "automatico") {
+    controleAutomatico();
+  }
+
+  res.json({
+    sucesso: true,
+  });
 });
 
 /* DASHBOARD CONSULTA */
 app.get("/api/status", (req, res) => {
-    res.json(sistema);
+  res.json(sistema);
 });
 
 /* CONSULTAR HISTÓRICO DE MEDIÇÕES */
 app.get("/api/historico", (req, res) => {
-    res.json(historico);
+  res.json(historico);
 });
 
 /* CONSULTAR HISTÓRICO DE ACIONAMENTOS */
 app.get("/api/historico-bomba", (req, res) => {
-    res.json(historicoBomba);
+  res.json(historicoBomba);
 });
 
 /* CONSULTAR ALERTAS */
 app.get("/api/alertas", (req, res) => {
-    res.json(alertas);
+  res.json(alertas);
 });
 
 /* ALTERAR BOMBA */
 app.post("/api/bomba", (req, res) => {
-    if (sistema.modo !== "manual") {
-        return res.status(400).json({
-            erro: "Controle manual indisponível."
-        });
-    }
+  if (sistema.modo !== "manual") {
+    return res.status(400).json({
+      erro: "Controle manual indisponível.",
+    });
+  }
 
-    if (typeof req.body.ligar !== "boolean") {
-        return res.status(400).json({
-            erro: "Estado da bomba inválido."
-        });
-    }
+  if (typeof req.body.ligar !== "boolean") {
+    return res.status(400).json({
+      erro: "Estado da bomba inválido.",
+    });
+  }
 
-    if (req.body.ligar && sistema.nivel >= sistema.maximo) {
-        return res.status(400).json({
-            erro: "Limite máximo atingido."
-        });
-    }
+  if (req.body.ligar && sistema.nivel >= sistema.maximo) {
+    return res.status(400).json({
+      erro: "Limite máximo atingido.",
+    });
+  }
 
-    registrarAcionamento(req.body.ligar);
+  registrarAcionamento(req.body.ligar);
 
-    res.json(sistema);
+  res.json(sistema);
 });
 
 /* ALTERAR MODO */
 app.post("/api/modo", (req, res) => {
-    const modo = req.body.modo;
+  const modo = req.body.modo;
 
-    if (modo !== "manual" && modo !== "automatico") {
-        return res.status(400).json({
-            erro: "Modo inválido."
-        });
-    }
+  if (modo !== "manual" && modo !== "automatico") {
+    return res.status(400).json({
+      erro: "Modo inválido.",
+    });
+  }
 
-    sistema.modo = modo;
+  sistema.modo = modo;
 
-    if (sistema.modo === "automatico") {
-        controleAutomatico();
-    }
+  if (sistema.modo === "automatico") {
+    controleAutomatico();
+  }
 
-    res.json(sistema);
+  res.json(sistema);
 });
 
 /* CONFIGURAR LIMITES */
 app.post("/api/limites", (req, res) => {
-    const minimo = Number(req.body.minimo);
-    const maximo = Number(req.body.maximo);
+  const minimo = Number(req.body.minimo);
+  const maximo = Number(req.body.maximo);
 
-    if (minimo >= maximo) {
-        return res.status(400).json({
-            erro: "Limites inválidos."
-        });
-    }
+  if (minimo >= maximo) {
+    return res.status(400).json({
+      erro: "Limites inválidos.",
+    });
+  }
 
-    sistema.minimo = minimo;
-    sistema.maximo = maximo;
+  sistema.minimo = minimo;
+  sistema.maximo = maximo;
 
-    verificarNivelCritico();
+  verificarNivelCritico();
 
-    if (sistema.modo === "automatico") {
-        controleAutomatico();
-    }
+  if (sistema.modo === "automatico") {
+    controleAutomatico();
+  }
 
-    res.json(sistema);
+  res.json(sistema);
 });
 
 /* INICIAR SERVIDOR */
 app.listen(PORT, () => {
-    console.log(`AquaLevel rodando em http://localhost:${PORT}`);
+  console.log(`AquaLevel rodando em http://localhost:${PORT}`);
 });
