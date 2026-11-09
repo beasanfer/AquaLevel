@@ -6,30 +6,23 @@ app.use(express.json());
 app.use(express.static("public"));
 
 let sistema = {
-  nivel: 72,
-  litros: 720,
-  bombaLigada: true,
+  nivel: 0,
+  litros: 0,
+  bombaLigada: false,
   modo: "automatico",
   minimo: 30,
   maximo: 90,
   sensorOK: true,
 };
 
-/* HISTÓRICO DE MEDIÇÕES */
 let historico = [];
-
-/* HISTÓRICO DE ACIONAMENTOS DA BOMBA */
 let historicoBomba = [];
-
-/* ALERTAS DE NÍVEL CRÍTICO */
 let alertas = [];
 let nivelCriticoAtivo = false;
 
-/* REGISTRAR ALTERAÇÃO DE ESTADO DA BOMBA */
 function registrarAcionamento(novoEstado) {
   if (sistema.bombaLigada !== novoEstado) {
     sistema.bombaLigada = novoEstado;
-
     historicoBomba.push({
       estado: novoEstado ? "ligada" : "desligada",
       modo: sistema.modo,
@@ -38,7 +31,6 @@ function registrarAcionamento(novoEstado) {
   }
 }
 
-/* VERIFICAR NÍVEL CRÍTICO */
 function verificarNivelCritico() {
   if (sistema.nivel <= sistema.minimo) {
     if (!nivelCriticoAtivo) {
@@ -48,7 +40,6 @@ function verificarNivelCritico() {
         nivel: sistema.nivel,
         dataHora: new Date().toISOString(),
       });
-
       nivelCriticoAtivo = true;
     }
   } else {
@@ -56,25 +47,11 @@ function verificarNivelCritico() {
   }
 }
 
-/* CONTROLE AUTOMÁTICO DA BOMBA */
-function controleAutomatico() {
-  if (!sistema.sensorOK) {
-    return;
-  }
-
-  if (sistema.nivel <= sistema.minimo) {
-    registrarAcionamento(true);
-  } else if (sistema.nivel >= sistema.maximo) {
-    registrarAcionamento(false);
-  }
-}
-
-/* ESP32 ENVIA LEITURA */
+/* ESP32 ENVIA LEITURA E RECEBE COMANDO NA MESMA RESPOSTA (PIGGYBACK) */
 app.post("/api/nivel", (req, res) => {
   const nivel = Number(req.body.nivel);
   const litros = Number(req.body.litros);
 
-  /* VALIDAR LEITURA DO SENSOR */
   if (
     req.body.nivel === undefined ||
     req.body.nivel === null ||
@@ -93,55 +70,67 @@ app.post("/api/nivel", (req, res) => {
     return res.status(400).json({
       sucesso: false,
       erro: "Leitura inválida do sensor.",
+      modo: sistema.modo,
+      minimo: sistema.minimo,
+      maximo: sistema.maximo,
+      bombaLigada: sistema.bombaLigada,
     });
   }
 
-  /* SENSOR VOLTOU AO FUNCIONAMENTO NORMAL */
   sistema.sensorOK = true;
-
   sistema.nivel = nivel;
   sistema.litros = litros;
 
-  /* REGISTRAR MEDIÇÃO NO HISTÓRICO */
+  // ESP32 é a fonte da verdade sobre o estado real da bomba
+  if (typeof req.body.bombaLigada === "boolean") {
+    registrarAcionamento(req.body.bombaLigada);
+  }
+
   historico.push({
     nivel: sistema.nivel,
     litros: sistema.litros,
     dataHora: new Date().toISOString(),
   });
 
-  /* VERIFICAR ALERTA DE NÍVEL CRÍTICO */
   verificarNivelCritico();
 
-  if (sistema.modo === "automatico") {
-    controleAutomatico();
-  }
-
+  // PIGGYBACK: devolve o comando junto com o ACK da leitura.
+  // O ESP32 não precisa mais de uma segunda requisição GET.
   res.json({
     sucesso: true,
+    modo: sistema.modo,
+    minimo: sistema.minimo,
+    maximo: sistema.maximo,
+    bombaLigada: sistema.bombaLigada,
   });
 });
 
-/* DASHBOARD CONSULTA */
+/* Rota de comando isolada — mantida apenas para debug (curl). */
+app.get("/api/comando", (req, res) => {
+  res.json({
+    bombaLigada: sistema.bombaLigada,
+    modo: sistema.modo,
+    minimo: sistema.minimo,
+    maximo: sistema.maximo,
+  });
+});
+
 app.get("/api/status", (req, res) => {
   res.json(sistema);
 });
 
-/* CONSULTAR HISTÓRICO DE MEDIÇÕES */
 app.get("/api/historico", (req, res) => {
   res.json(historico);
 });
 
-/* CONSULTAR HISTÓRICO DE ACIONAMENTOS */
 app.get("/api/historico-bomba", (req, res) => {
   res.json(historicoBomba);
 });
 
-/* CONSULTAR ALERTAS */
 app.get("/api/alertas", (req, res) => {
   res.json(alertas);
 });
 
-/* ALTERAR BOMBA */
 app.post("/api/bomba", (req, res) => {
   if (sistema.modo !== "manual") {
     return res.status(400).json({
@@ -166,7 +155,6 @@ app.post("/api/bomba", (req, res) => {
   res.json(sistema);
 });
 
-/* ALTERAR MODO */
 app.post("/api/modo", (req, res) => {
   const modo = req.body.modo;
 
@@ -178,14 +166,9 @@ app.post("/api/modo", (req, res) => {
 
   sistema.modo = modo;
 
-  if (sistema.modo === "automatico") {
-    controleAutomatico();
-  }
-
   res.json(sistema);
 });
 
-/* CONFIGURAR LIMITES */
 app.post("/api/limites", (req, res) => {
   const minimo = Number(req.body.minimo);
   const maximo = Number(req.body.maximo);
@@ -201,14 +184,9 @@ app.post("/api/limites", (req, res) => {
 
   verificarNivelCritico();
 
-  if (sistema.modo === "automatico") {
-    controleAutomatico();
-  }
-
   res.json(sistema);
 });
 
-/* INICIAR SERVIDOR */
 app.listen(PORT, () => {
   console.log(`AquaLevel rodando em http://localhost:${PORT}`);
 });
