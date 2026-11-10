@@ -178,6 +178,22 @@ header p {
     color: #68758b;
 }
 
+/* Item 6: banner de falha do sensor */
+
+.sensor-banner {
+    background: #fff1f1;
+    color: #c92d2d;
+    border: 1px solid #f5c2c2;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 15px;
+    font-weight: bold;
+}
+
+.sensor-banner.hidden {
+    display: none;
+}
+
 /* CARDS */
 
 .card {
@@ -681,6 +697,12 @@ body.alto-contraste .warning {
     background: #2b2300;
     color: #fff;
     border: 1px solid #ffd600;
+}
+
+body.alto-contraste .sensor-banner {
+    background: #2b0000;
+    color: #fff;
+    border: 1px solid #ff5c5c;
 }
 
 body.alto-contraste .access-btn {

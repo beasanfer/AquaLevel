@@ -101,6 +101,11 @@
                 </div>
             </header>
 
+            <!-- Aviso de sensor com falha -->
+            <div id="sensorBanner" class="sensor-banner hidden" role="alert">
+                ⚠ Sensor de nível com falha — exibindo a última leitura válida.
+            </div>
+
             <section class="grid-top">
                 <article class="card nivel-card">
                     <h3>NÍVEL DO RESERVATÓRIO</h3>
@@ -120,7 +125,7 @@
                     <div class="details">
                         <span>
                             Capacidade
-                            <strong>1000 litros</strong>
+                            <strong id="capacidadeLitros">-- litros</strong>
                         </span>
 
                         <span>
@@ -198,8 +203,8 @@
                         </div>
 
                         <div>
-                            <label>Histerese</label>
-                            <h2>5%</h2>
+                            <label>Banda de operação</label>
+                            <h2><span id="bandaValue">60</span>%</h2>
                         </div>
 
                         <div>
@@ -359,11 +364,13 @@
                     </div>
 
                     <div class="config-item">
-                        <label>Histerese</label>
+                        <label>Banda de operação</label>
                         <p>
-                            Evita acionamentos repetidos próximos aos limites.
+                            Diferença entre nível mínimo e máximo. É a faixa
+                            onde a bomba mantém seu estado, evitando
+                            acionamentos repetidos.
                         </p>
-                        <strong>5%</strong>
+                        <strong id="bandaConfiguracao">--%</strong>
                     </div>
                 </article>
 

@@ -4,9 +4,23 @@
 
 let modo = "automatico";
 let nivel = 72;
+let litrosAtual = 720; // valor autoritativo vindo do servidor (dados.litros)
 let bombaLigada = true;
 let minimo = 30;
 let maximo = 90;
+
+/* Constantes espelhadas de rest.ino — manter em sincronia com o firmware.
+   ALTURA_RESERVATORIO_CM: distância sensor→fundo (tanque vazio).
+   GAP_SENSOR_CM: distância mínima sensor↔água (tanque cheio).
+   A altura útil (curso da água do vazio ao cheio) é a diferença. */
+const ALTURA_RESERVATORIO_CM = 22.5;
+const GAP_SENSOR_CM = 5.0;
+const ALTURA_UTIL_CM = ALTURA_RESERVATORIO_CM - GAP_SENSOR_CM;
+
+/* Capacidade do reservatório — descoberta na primeira leitura válida
+   (litros / (nivel/100)) e cacheada para permanecer exibida mesmo
+   quando o nível cair a 0 momentaneamente. */
+let capacidadeLitrosConhecida = null;
 
 /* 2. ELEMENTOS HTML */
 
@@ -29,11 +43,23 @@ const tabelaHistorico = document.getElementById("tabelaHistorico");
 const listaAlertas = document.getElementById("listaAlertas");
 const alertasDashboard = document.getElementById("alertas");
 const eventosDashboard = document.getElementById("eventos");
+
+/* Campos antes estáticos (bug de UI): capacidade total e altura da água */
+const capacidadeEl = document.getElementById("capacidadeLitros");
+const alturaEl = document.getElementById("altura");
+
 /* ISSUE #23 */
 
 const minimoConfiguracao = document.getElementById("minimoConfiguracao");
 const maximoConfiguracao = document.getElementById("maximoConfiguracao");
 const modoConfiguracao = document.getElementById("modoConfiguracao");
+
+/* Banda de operação (substitui a antiga "Histerese 5%" fixa) */
+const bandaValue = document.getElementById("bandaValue");
+const bandaConfiguracao = document.getElementById("bandaConfiguracao");
+
+/* Aviso de falha do sensor */
+const sensorBanner = document.getElementById("sensorBanner");
 
 /* ACESSIBILIDADE */
 
@@ -126,12 +152,60 @@ navLinks.forEach((link) => {
   });
 });
 
+/* 3.2: indicador de conexão do topo — deixa de ser hardcoded.
+ * Estados:
+ *   - "online"           → servidor ok, ESP32 reportando, sensor ok
+ *   - "sensor_falha"     → servidor responde, mas sensorOK=false
+ *                          (falha do HC-SR04 ou ESP32 silencioso)
+ *   - "servidor_offline" → fetch de /api/status falhou
+ */
+function atualizarIndicadorConexao(estado) {
+  const wifiStatusEl = document.getElementById("wifiStatus");
+  if (!wifiStatusEl) return;
+  // <span> é o irmão imediato de #wifiStatus dentro de .connection
+  const espStatusEl = wifiStatusEl.nextElementSibling;
+
+  if (estado === "online") {
+    wifiStatusEl.textContent = "● Conectado";
+    wifiStatusEl.style.color = "#68c989";
+    if (espStatusEl) espStatusEl.textContent = "ESP32 • Online";
+  } else if (estado === "sensor_falha") {
+    wifiStatusEl.textContent = "● Sensor com falha";
+    wifiStatusEl.style.color = "#ffd600";
+    if (espStatusEl) espStatusEl.textContent = "ESP32 • Atenção";
+  } else {
+    wifiStatusEl.textContent = "● Sem conexão";
+    wifiStatusEl.style.color = "#ef4040";
+    if (espStatusEl) espStatusEl.textContent = "Servidor • Offline";
+  }
+}
+
 /* 4. ATUALIZAR INTERFACE */
 
 function atualizarDashboard() {
   percentual.textContent = nivel + "%";
-  litros.textContent = nivel * 10 + " litros";
+  litros.textContent = Math.round(litrosAtual) + " litros";
   agua.style.height = nivel + "%";
+
+  /* Capacidade total do reservatório — derivada de litros/(nivel/100)
+     na primeira leitura válida e cacheada. O servidor só expõe nivel e
+     litros; a relação litros = nivel × CAPACIDADE / 100 permite
+     recuperar a capacidade exata. */
+  if (nivel > 0 && litrosAtual > 0) {
+    capacidadeLitrosConhecida = Math.round((litrosAtual * 100) / nivel);
+  }
+  if (capacidadeEl) {
+    capacidadeEl.textContent =
+      capacidadeLitrosConhecida !== null
+        ? capacidadeLitrosConhecida + " litros"
+        : "-- litros";
+  }
+
+  /* Altura da coluna de água (cm) — proporcional ao curso útil do sensor
+     (ALTURA_UTIL_CM = ALTURA_RESERVATORIO_CM − GAP_SENSOR_CM). */
+  if (alturaEl) {
+    alturaEl.textContent = ((nivel / 100) * ALTURA_UTIL_CM).toFixed(1) + " cm";
+  }
 
   bombaStatus.textContent = bombaLigada ? "Ligada" : "Desligada";
   bombaStatus.style.color = bombaLigada ? "#27a355" : "#ef4040";
@@ -182,6 +256,34 @@ function atualizarDashboard() {
   if (modoConfiguracao) {
     modoConfiguracao.textContent =
       modo === "automatico" ? "Automático" : "Manual";
+  }
+
+  /* Banda de operação = diferença entre máximo e mínimo.
+     Reflete o comportamento REAL do sistema:
+       - bomba liga quando nível < mínimo
+       - bomba desliga quando nível > máximo
+       - entre mínimo e máximo, a bomba mantém o estado (banda morta) */
+  const banda = Math.max(0, maximo - minimo);
+
+  if (bandaValue) {
+    bandaValue.textContent = Math.round(banda);
+  }
+
+  if (bandaConfiguracao) {
+    bandaConfiguracao.textContent = Math.round(banda) + "%";
+  }
+
+  /* Sliders: só sobrescreve se o usuário NÃO estiver interagindo.
+     Evita que o polling de 5s reverta o valor enquanto o slider está
+     em foco (drag em andamento). */
+  if (document.activeElement !== inputMin) {
+    inputMin.value = minimo;
+    minValue.textContent = minimo;
+  }
+
+  if (document.activeElement !== inputMax) {
+    inputMax.value = maximo;
+    maxValue.textContent = maximo;
   }
 
   ligarBomba.disabled = modo !== "manual";
@@ -365,6 +467,8 @@ salvarLimites.addEventListener("click", async () => {
     minimo = novoMinimo;
     maximo = novoMaximo;
 
+    /* Reflete imediatamente os novos valores (sliders + banda) sem
+       esperar o próximo polling. */
     atualizarDashboard();
 
     alert("Limites atualizados.");
@@ -465,20 +569,29 @@ async function buscarDados() {
     const dados = await resposta.json();
 
     nivel = dados.nivel;
+    /* Litros autoritativos vêm do servidor (calculados no ESP32 com
+       CAPACIDADE_LITROS). Não assumimos mais "nivel * 10". */
+    litrosAtual = Number(dados.litros) || 0;
     bombaLigada = dados.bombaLigada;
     minimo = dados.minimo;
     maximo = dados.maximo;
     modo = dados.modo;
 
-    inputMin.value = minimo;
-    inputMax.value = maximo;
+    /* Item 6: exibe aviso quando o sensor reportou falha (sensorOK=false). */
+    if (sensorBanner) {
+      sensorBanner.classList.toggle("hidden", dados.sensorOK !== false);
+    }
 
-    minValue.textContent = minimo;
-    maxValue.textContent = maximo;
+    /* 3.2: reflete o estado real no indicador do topo. */
+    atualizarIndicadorConexao(
+      dados.sensorOK === false ? "sensor_falha" : "online",
+    );
 
     atualizarDashboard();
   } catch (erro) {
     console.error("Erro de comunicação:", erro);
+    /* 3.2: servidor inacessível — também atualiza o topo. */
+    atualizarIndicadorConexao("servidor_offline");
   }
 }
 
@@ -542,6 +655,20 @@ async function buscarHistorico() {
           second: "2-digit",
         });
 
+        const bombaTexto =
+          registro.bombaLigada === true
+            ? "Ligada"
+            : registro.bombaLigada === false
+              ? "Desligada"
+              : "-";
+
+        const modoTexto =
+          registro.modo === "automatico"
+            ? "Automático"
+            : registro.modo === "manual"
+              ? "Manual"
+              : "-";
+
         const linha = document.createElement("tr");
 
         linha.innerHTML = `
@@ -549,8 +676,8 @@ async function buscarHistorico() {
                     <td>${hora}</td>
                     <td>${registro.nivel}%</td>
                     <td>${registro.litros} L</td>
-                    <td>-</td>
-                    <td>-</td>
+                    <td>${bombaTexto}</td>
+                    <td>${modoTexto}</td>
                 `;
 
         tabelaHistorico.appendChild(linha);
@@ -586,7 +713,13 @@ function criarAlertaHTML(alerta, mostrarData = false) {
   });
 
   const titulo =
-    alerta.tipo === "nivel_critico" ? "Nível crítico" : alerta.tipo;
+    alerta.tipo === "nivel_critico"
+      ? "Nível crítico"
+      : alerta.tipo === "corte_seguranca"
+        ? "Corte de segurança"
+        : alerta.tipo === "esp32_offline"
+          ? "ESP32 offline"
+          : alerta.tipo;
 
   const nivelTexto =
     alerta.nivel !== undefined ? ` Nível registrado: ${alerta.nivel}%.` : "";
