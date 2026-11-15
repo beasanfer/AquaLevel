@@ -57,26 +57,19 @@ O projeto busca reduzir desperdícios por transbordamento, diminuir a necessidad
 - **Módulo relé 2 canais 5V 10A com optoacoplador** — acionamento da bomba.
 - **Mini bomba d'água 12V RS-385** — bomba utilizada no projeto.
 - **Fonte 12V 3A** e **fonte 5V 3A** — alimentação.
-- **LEDs** — indicação física de nível e estado da bomba.
+- **LEDs** (azul, verde, amarelo, vermelho) — indicação física de nível e estado da bomba.
 - **Resistores, jumpers, protoboard, plugues e abraçadeiras** — montagem e conexão.
 
-### Firmware
-- **Arduino/C++**
-- **WiFi.h**
-- **HTTPClient.h**
-- **ArduinoJson**
-- **pulseIn** para leitura do HC-SR04
-
 ### Servidor
-- **Node.js** (18+)
-- **Express 5**
-- **JSON** para persistência em `estado.json`
+- **Node.js**
+- **Express**
+- **JSON**
 
 ### Frontend
 - **HTML5**
 - **CSS3**
 - **JavaScript**
-- **Chart.js** para gráfico de nível
+- **Chart.js**
 
 ---
 
@@ -185,15 +178,15 @@ const float CAPACIDADE_LITROS = 1000.0f;
 
 ### 📌 Pinagem utilizada no firmware
 
-|Componente|Pino ESP32|
-|---|---|
-|HC-SR04 TRIG|GPIO 13|
-|HC-SR04 ECHO|GPIO 35|
-|Relé da bomba|GPIO 19|
-|LED da bomba|GPIO 4|
-|LED nível 1|GPIO 18|
-|LED nível 2|GPIO 17|
-|LED nível 3|GPIO 16|
+| Componente    | Pino ESP32 |
+|---------------|------------|
+| HC-SR04 TRIG  | GPIO 13    |
+| HC-SR04 ECHO  | GPIO 35    |
+| Relé da bomba | GPIO 19    |
+| LED da bomba  | GPIO 4     |
+| LED nível 1   | GPIO 18    |
+| LED nível 2   | GPIO 17    |
+| LED nível 3   | GPIO 16    |
 
 > Confira a pinagem real da sua montagem antes de energizar a bomba e o relé.
 
@@ -281,17 +274,17 @@ curl -X POST http://localhost:3000/api/limites \
 
 ### Endpoints disponíveis
 
-|Método|Endpoint|Descrição|
-|---|---|---|
-|`POST`|`/api/nivel`|Recebe leitura do ESP32 e devolve comandos|
-|`GET` |`/api/status`|Retorna o estado atual do sistema|
-|`GET` |`/api/comando`|Retorna comando/estado para debug|
-|`POST`|`/api/bomba`|Liga/desliga bomba no modo manual|
-|`POST`|`/api/modo`|Altera entre `automatico` e `manual`|
-|`POST`|`/api/limites`|Atualiza níveis mínimo e máximo|
-|`GET`|`/api/historico`|Retorna histórico de medições|
-|`GET`|`/api/historico-bomba`|Retorna histórico de acionamentos|
-|`GET`|`/api/alertas` |Retorna alertas registrados|
+| Método | Endpoint               | Descrição                                  |
+|--------|------------------------|--------------------------------------------|
+| `POST` | `/api/nivel`           | Recebe leitura do ESP32 e devolve comandos |
+| `GET`  | `/api/status`          | Retorna o estado atual do sistema          |
+| `GET`  | `/api/comando`         | Retorna comando/estado para debug          |
+| `POST` | `/api/bomba`           | Liga/desliga bomba no modo manual          |
+| `POST` | `/api/modo`            | Altera entre `automatico` e `manual`       |
+| `POST` | `/api/limites`         | Atualiza níveis mínimo e máximo            |
+| `GET`  | `/api/historico`       | Retorna histórico de medições              |
+| `GET`  | `/api/historico-bomba` | Retorna histórico de acionamentos          |
+| `GET`  | `/api/alertas`         | Retorna alertas registrados                |
 
 ---
 
@@ -316,14 +309,14 @@ AquaLevel/
 │       └── funcionalidade/
 │           ├── local/
 │           └── remoto/
-├── public/
+├── public/                            # browser
 │   ├── icons/
 │   ├── index.html
 │   ├── script.js
 │   └── style.css
 ├── package.json
 ├── package-lock.json
-├── server.js
+├── server.js                          # servidor
 └── README.md
 ```
 
@@ -379,8 +372,6 @@ Contribuições são bem-vindas.
    ```
 5. Abra um Pull Request.
 
-Leia o [Guia de Contribuição](CONTRIBUTING.md) para mais detalhes.
-
 ---
 
 ## 📄 Licença
@@ -391,20 +382,20 @@ Este projeto está licenciado sob a **Licença MIT**. Veja o arquivo [LICENSE](L
 
 ## 👨‍💻 Autores
 
-**Alex de Lima Rodrigues**  
-Discente do Curso de Bacharel em Engenharia da Computação — Faculdade Fametro  
-GitHub: [@yellowperson12](https://github.com/yellowperson12)  
-LinkedIn: [alex-rodrigues-965b59392](https://www.linkedin.com/in/alex-rodrigues-965b59392/)
+**Alex de Lima Rodrigues**
+Discente do Curso de Bacharel em Engenharia da Computação — Faculdade Fametro
+GitHub: [@yellowperson12](https://github.com/yellowperson12)
+LinkedIn: https://www.linkedin.com/in/alex-rodrigues-965b59392/
 
-**Beatriz Santos Ferreira**  
-Discente do Curso de Bacharel em Engenharia da Computação — Faculdade Fametro  
-GitHub: [@beasanfer](https://github.com/beasanfer)  
-LinkedIn: não informado
+**Beatriz Santos Ferreira**
+Discente do Curso de Bacharel em Engenharia da Computação — Faculdade Fametro
+GitHub: [@beasanfer](https://github.com/beasanfer)
+LinkedIn: https://www.linkedin.com/in/beatriz-santos-476587222
 
-**Luana Magalhães Leal**  
-Docente do Curso de Bacharel em Engenharia da Computação — Faculdade Fametro  
-GitHub: [@ProfaLuanaLeal](https://github.com/ProfaLuanaLeal)  
-LinkedIn: [luanalealm](https://www.linkedin.com/in/luanalealm/)
+**Luana Magalhães Leal**
+Docente do Curso de Bacharel em Engenharia da Computação — Faculdade Fametro
+GitHub: [@ProfaLuanaLeal](https://github.com/ProfaLuanaLeal)
+LinkedIn: https://www.linkedin.com/in/luanalealm/
 
 ---
 
