@@ -1,9 +1,0 @@
-{
-  "nivel": 0,
-  "litros": 0,
-  "bombaLigada": false,
-  "modo": "automatico",
-  "minimo": 30,
-  "maximo": 90,
-  "sensorOK": false
-}

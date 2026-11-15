@@ -1,3 +1,0 @@
-# Ferramenta utilizada
-
-- Drawio
