@@ -2,7 +2,9 @@
 
 <div align="center">
 
-![Logo do Projeto](docs/screenshots/logo.png)
+<img src="docs/logo.svg" alt="Logo do Projeto" width="300" height="200">
+
+<!-- ![Logo do Projeto](docs/logo.svg) -->
 
 **Automação e controle inteligente de reservatórios de água com ESP32 e dashboard web**
 
@@ -28,10 +30,10 @@ O projeto busca reduzir desperdícios por transbordamento, diminuir a necessidad
 - 🎯 **Monitoramento contínuo do nível** — leituras do HC-SR04 com filtragem por mediana.
 - ⚡ **Controle automático da bomba** — liga abaixo do nível mínimo e desliga acima do nível máximo.
 - 🔒 **Corte de segurança** — a bomba é desligada em nível crítico (≥ 98%), inclusive em modo manual.
-- 🎨 **Dashboard web** — nível percentual, litros, altura da água, estado da bomba e modo de operação.
+- 🎨 **Dashboard Web** — nível percentual, litros, altura da água, estado da bomba e modo de operação.
 - 📈 **Histórico e gráfico** — registros de medições, acionamentos da bomba e visualização com Chart.js.
 - 🚨 **Alertas** — nível crítico, corte de segurança e ESP32 offline.
-- 🔌 **Comunicação Wi-Fi/HTTP** — o ESP32 envia leituras e recebe comandos na mesma requisição (*piggyback*).
+- 🔌 **Comunicação Wi-Fi/HTTP** — o ESP32 envia leituras e recebe comandos na mesma requisição (_piggyback_).
 - 💾 **Persistência de estado** — estado salvo em `estado.json` no servidor.
 - ♿ **Acessibilidade** — ajuste de fonte e alto contraste no dashboard.
 - 💡 **Indicadores físicos** — LEDs de nível e LED de estado da bomba.
@@ -171,8 +173,8 @@ const char* URL_NIVEL  = "http://IP_DO_SERVIDOR:3000/api/nivel";
 Ajuste também os parâmetros físicos do reservatório:
 
 ```cpp
-float ALTURA_RESERVATORIO_CM = 22.5f; // distância sensor → fundo (tanque vazio)
-float GAP_SENSOR_CM          = 5.0f;  // distância mínima sensor ↔ água (tanque cheio)
+float ALTURA_RESERVATORIO_CM  = 22.5f; // distância sensor → fundo (tanque vazio)
+float GAP_SENSOR_CM           = 5.0f;  // distância mínima sensor ↔ água (tanque cheio)
 const float CAPACIDADE_LITROS = 1000.0f;
 ```
 
@@ -358,11 +360,11 @@ Atualmente o repositório **não possui uma suíte automatizada de testes config
 Contribuições são bem-vindas.
 
 1. Faça um Fork do projeto.
-2. Crie uma Branch para sua Feature:
+2. Crie uma Branch para a sua Feature:
    ```bash
    git checkout -b feature/MinhaFeature
    ```
-3. Commit suas mudanças:
+3. Commit as suas mudanças:
    ```bash
    git commit -m 'Adiciona MinhaFeature'
    ```
