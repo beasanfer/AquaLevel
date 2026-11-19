@@ -45,6 +45,8 @@ body {
     align-items: center;
     gap: 6px;
     flex: 1;
+    min-width: 0; /* permite encolher abaixo do conteúdo */
+    overflow-x: auto; /* rola em vez de empurrar os vizinhos */
 }
 
 .menu a {
@@ -131,6 +133,7 @@ body {
 
 .connection {
     min-width: 120px;
+    flex-shrink: 0;
     text-align: right;
 }
 
