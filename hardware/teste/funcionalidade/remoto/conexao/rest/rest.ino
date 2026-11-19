@@ -15,7 +15,7 @@ const int LEDS_NIVEL[3] = {18, 17, 16};
 // >>> SUBSTITUA PELOS SEUS VALORES REAIS <<<
 const char* WIFI_SSID  = "RODRIGUES";
 const char* WIFI_SENHA = "Lima44@36";
-const char* URL_NIVEL  = "http://192.168.0.20:3000/api/nivel";
+const char* URL_NIVEL  = "http://192.168.0.27:3000/api/nivel";
 
 /* ==================== CONFIGURAÇÃO ==================== */
 const bool RELE_ATIVO_EM_LOW = true;
@@ -23,7 +23,7 @@ const bool RELE_ATIVO_EM_LOW = true;
 // ALTURA_RESERVATORIO_CM = distância do sensor até o fundo (tanque vazio)
 // GAP_SENSOR_CM          = distância mínima sensor↔água (tanque cheio)
 // Curso útil do sensor   = (ALTURA_RESERVATORIO_CM - GAP_SENSOR_CM)
-float ALTURA_RESERVATORIO_CM = 22.5f;
+float ALTURA_RESERVATORIO_CM = 23.6f;
 float GAP_SENSOR_CM          = 5.0f;
 
 const float CAPACIDADE_LITROS = 1000.0f;

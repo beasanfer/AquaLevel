@@ -147,7 +147,7 @@ void atualizarLedsNivel(float nivel) {
 /* ==================== SETUP ==================== */
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   delay(1000);
 
   pinMode(PINO_TRIG, OUTPUT);
