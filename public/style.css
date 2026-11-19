@@ -1,3 +1,5 @@
+/* ==================== RESET / BASE ==================== */
+
 * {
     box-sizing: border-box;
     margin: 0;
@@ -14,7 +16,7 @@ body {
     color: #14213d;
 }
 
-/* NAVBAR */
+/* ==================== NAVBAR ==================== */
 
 .topbar {
     min-height: 82px;
@@ -40,13 +42,16 @@ body {
     margin-top: 3px;
 }
 
+/* Menu de navegação: overflow-x permite rolar em telas estreitas
+   sem empurrar os controles vizinhos; min-width: 0 habilita o flex
+   item a encolher abaixo do conteúdo. */
 .menu {
     display: flex;
     align-items: center;
     gap: 6px;
     flex: 1;
-    min-width: 0; /* permite encolher abaixo do conteúdo */
-    overflow-x: auto; /* rola em vez de empurrar os vizinhos */
+    min-width: 0;
+    overflow-x: auto;
 }
 
 .menu a {
@@ -70,6 +75,8 @@ body {
     flex-shrink: 0;
 }
 
+/* Ajustes finos de ícones por página (tamanhos herdados do design
+   original dos PNGs) */
 .menu a[data-page="dashboard"] img,
 .menu a[data-page="historico"] img,
 .menu a[data-page="alertas-page"] img {
@@ -93,7 +100,7 @@ body {
     background: #0877e8;
 }
 
-/* ACESSIBILIDADE */
+/* ==================== ACESSIBILIDADE (fonte / contraste) ==================== */
 
 .accessibility {
     display: flex;
@@ -116,6 +123,7 @@ body {
     font-family: inherit;
 }
 
+/* Realce visível no hover e no foco (inclui usuários de teclado) */
 .access-btn:hover,
 .access-btn:focus-visible {
     background: white;
@@ -129,7 +137,7 @@ body {
     white-space: nowrap;
 }
 
-/* CONEXÃO */
+/* ==================== INDICADOR DE CONEXÃO ==================== */
 
 .connection {
     min-width: 120px;
@@ -147,7 +155,9 @@ body {
     font-size: 11px;
 }
 
-/* PÁGINAS */
+/* ==================== PÁGINAS (SPA) ==================== */
+/* Cada <main class="page"> fica oculto; script.js adiciona
+   .active-page no alvo para exibir apenas uma página por vez. */
 
 .page {
     display: none;
@@ -157,14 +167,14 @@ body {
     display: block;
 }
 
-/* CONTEÚDO PRINCIPAL */
+/* ==================== CONTEÚDO PRINCIPAL ==================== */
 
 main {
     width: 100%;
     padding: 20px;
 }
 
-/* CABEÇALHO */
+/* ==================== CABEÇALHO DE PÁGINA ==================== */
 
 header {
     display: flex;
@@ -181,7 +191,9 @@ header p {
     color: #68758b;
 }
 
-/* Item 6: banner de falha do sensor */
+/* ==================== BANNER DE FALHA DO SENSOR ==================== */
+/* Exibido por script.js quando /api/status retorna sensorOK=false;
+   .hidden alterna a visibilidade sem afetar layout. */
 
 .sensor-banner {
     background: #fff1f1;
@@ -197,7 +209,7 @@ header p {
     display: none;
 }
 
-/* CARDS */
+/* ==================== CARDS ==================== */
 
 .card {
     background: white;
@@ -213,7 +225,9 @@ header p {
     font-size: 15px;
 }
 
-/* GRIDS */
+/* ==================== GRIDS ==================== */
+/* Cada grid define a distribuição dos cards em sua faixa da página.
+   As regras de responsividade ficam no final do arquivo. */
 
 .grid-top {
     display: grid;
@@ -258,7 +272,7 @@ header p {
     grid-template-columns: 1fr;
 }
 
-/* NÍVEL DA ÁGUA */
+/* ==================== NÍVEL DA ÁGUA ==================== */
 
 .nivel-content {
     display: flex;
@@ -286,7 +300,9 @@ header p {
     color: #29a45d;
 }
 
-/* TANQUE */
+/* ==================== TANQUE ==================== */
+/* .agua tem height controlada por script.js (nivel + "%").
+   A transição anima a subida/descida do nível entre leituras. */
 
 .tanque {
     width: 150px;
@@ -308,7 +324,7 @@ header p {
     transition: height 0.5s;
 }
 
-/* DETALHES */
+/* ==================== DETALHES (capacidade / altura / medição) ==================== */
 
 .details {
     display: flex;
@@ -325,7 +341,7 @@ header p {
     font-size: 13px;
 }
 
-/* BOMBA */
+/* ==================== BOMBA ==================== */
 
 .bomba-card {
     text-align: center;
@@ -365,7 +381,7 @@ header p {
     color: #14213d;
 }
 
-/* MODO E CONTROLE */
+/* ==================== MODO E CONTROLE ==================== */
 
 .modo-card,
 .controle-card {
@@ -379,7 +395,7 @@ header p {
     margin-top: 8px;
 }
 
-/* BOTÕES */
+/* ==================== BOTÕES ==================== */
 
 button {
     cursor: pointer;
@@ -387,6 +403,7 @@ button {
     font-family: inherit;
 }
 
+/* Botão de seleção de modo (automático / manual) */
 .mode {
     width: 100%;
     margin-bottom: 10px;
@@ -405,6 +422,7 @@ button {
     border-color: #29a455;
 }
 
+/* Botão de ação genérico (ligar/desligar/salvar) */
 .btn {
     width: 100%;
     padding: 14px;
@@ -437,7 +455,7 @@ button {
     margin-top: 20px;
 }
 
-/* LIMITES */
+/* ==================== LIMITES (sliders) ==================== */
 
 .limits {
     display: flex;
@@ -456,7 +474,7 @@ button {
     margin-top: 10px;
 }
 
-/* ALERTAS */
+/* ==================== ALERTAS ==================== */
 
 .alert {
     display: flex;
@@ -482,7 +500,7 @@ button {
     color: #b88100;
 }
 
-/* ESTATÍSTICAS */
+/* ==================== ESTATÍSTICAS (widgets do gráfico) ==================== */
 
 .statistics {
     display: grid;
@@ -499,14 +517,14 @@ button {
     flex-direction: column;
 }
 
-/* EVENTOS */
+/* ==================== EVENTOS (últimos acionamentos) ==================== */
 
 #eventos p {
     padding: 12px 0;
     border-bottom: 1px solid #eee;
 }
 
-/* HISTÓRICO */
+/* ==================== HISTÓRICO (tabela) ==================== */
 
 .table-container {
     width: 100%;
@@ -532,7 +550,7 @@ td {
     font-size: 14px;
 }
 
-/* CONFIGURAÇÕES */
+/* ==================== CONFIGURAÇÕES ==================== */
 
 .config-item {
     padding: 16px 0;
@@ -560,7 +578,7 @@ td {
     font-size: 20px;
 }
 
-/* RELATÓRIOS */
+/* ==================== RELATÓRIOS ==================== */
 
 .report-card {
     text-align: center;
@@ -583,7 +601,7 @@ td {
     font-size: 13px;
 }
 
-/* SOBRE */
+/* ==================== SOBRE ==================== */
 
 .sobre-grid h2 {
     margin-bottom: 12px;
@@ -619,7 +637,11 @@ td {
     line-height: 1.4;
 }
 
-/* ALTO CONTRASTE */
+/* ==================== ALTO CONTRASTE ==================== */
+/* Ativado por script.js via class="alto-contraste" no <body>
+   (persistido em localStorage). Redefine cores de fundo, texto,
+   bordas e foco para garantir razão de contraste alta em todo o
+   layout, incluindo widgets dinâmicos (alertas, banner, sliders). */
 
 body.alto-contraste {
     background: #000;
@@ -641,6 +663,8 @@ body.alto-contraste .menu .active {
     color: #000;
 }
 
+/* Ícones SVG/PNG claros são invertidos para permanecerem visíveis
+   sobre fundo branco no item ativo/hover */
 body.alto-contraste .menu a:hover img,
 body.alto-contraste .menu .active img {
     filter: invert(1);
@@ -666,6 +690,7 @@ body.alto-contraste .sobre-info span {
     color: #fff;
 }
 
+/* Destaques em ciano para manter contraste sobre fundo preto */
 body.alto-contraste .card h3,
 body.alto-contraste .limits h2,
 body.alto-contraste .config-item strong,
@@ -730,6 +755,7 @@ body.alto-contraste .agua {
     background: #00ffff;
 }
 
+/* Foco visível global no modo alto contraste (teclado / leitores) */
 body.alto-contraste button:focus-visible,
 body.alto-contraste a:focus-visible,
 body.alto-contraste input:focus-visible {
@@ -737,8 +763,9 @@ body.alto-contraste input:focus-visible {
     outline-offset: 3px;
 }
 
-/* RESPONSIVIDADE */
+/* ==================== RESPONSIVIDADE ==================== */
 
+/* Tablets grandes / notebooks compactos: menu quebra para a linha de baixo */
 @media (max-width: 1100px) {
     .topbar {
         flex-wrap: wrap;
@@ -758,6 +785,7 @@ body.alto-contraste input:focus-visible {
         grid-template-columns: 2fr 1fr 1fr;
     }
 
+    /* Card de controle ocupa toda a linha extra */
     .controle-card {
         grid-column: span 3;
     }
@@ -767,6 +795,7 @@ body.alto-contraste input:focus-visible {
     }
 }
 
+/* Tablets em retrato: grids empilham em uma coluna */
 @media (max-width: 900px) {
     .grid-top,
     .grid-middle,
@@ -794,6 +823,7 @@ body.alto-contraste input:focus-visible {
     }
 }
 
+/* Celulares: ajustes de espaçamento, ícones e colunas únicas */
 @media (max-width: 600px) {
     .topbar {
         padding: 12px;
@@ -807,6 +837,7 @@ body.alto-contraste input:focus-visible {
         display: none;
     }
 
+    /* Indicador textual de conexão é omitido em telas muito estreitas */
     .connection {
         display: none;
     }
@@ -815,6 +846,7 @@ body.alto-contraste input:focus-visible {
         margin-left: auto;
     }
 
+    /* Botão de contraste vira só ícone (texto oculto por font-size: 0) */
     .contrast-btn {
         font-size: 0;
     }

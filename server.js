@@ -5,26 +5,31 @@ const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-/* Item 5: persistência do estado em arquivo. */
+/* ==================== CONFIGURAÇÃO ==================== */
+// Arquivo de persistência do estado (sobrevive a reboots)
 const ARQUIVO_ESTADO = path.join(__dirname, "estado.json");
 
-/* Item (c): limites para evitar crescimento infinito dos arrays em memória. */
-const MAX_HISTORICO_MEMORIA = 5000; // ~1h20 de leituras (1/s)
-const HISTORICO_RESPOSTA = 1000; // últimos 1000 servidos à UI
+// Limites para evitar crescimento infinito dos arrays em memória
+const MAX_HISTORICO_MEMORIA = 5000;      // ~1h20 de leituras (1/s)
+const HISTORICO_RESPOSTA = 1000;         // últimos 1000 servidos à UI
 const MAX_HISTORICO_BOMBA_MEMORIA = 500; // acionamentos são esparsos
 const MAX_ALERTAS_MEMORIA = 200;
 
-/* Item (e): watchdog de comunicação com o ESP32. */
+// Watchdog de comunicação com o ESP32
 const TIMEOUT_ESP32_MS = 15000;
 const INTERVALO_WATCHDOG_MS = 5000;
 
+// Corte de segurança em modo manual (deve coincidir com
+// NIVEL_CORTE_SEGURANCA do firmware)
+const LIMITE_SEGURANCA_MANUAL = 98;
+
 app.use(express.json());
 
-/* 3.7: caminho do estático resolvido em relação a __dirname (não ao
- * CWD). Assim `node server.js` funciona independentemente do diretório
- * de onde foi invocado. */
+// Caminho do estático resolvido em relação a __dirname (não ao CWD),
+// permitindo `node server.js` de qualquer diretório.
 app.use(express.static(path.join(__dirname, "public")));
 
+/* ==================== ESTADO ==================== */
 const estadoPadrao = {
   nivel: 0,
   litros: 0,
@@ -42,11 +47,10 @@ function carregarEstado() {
       const salvo = JSON.parse(bruto);
       console.log(`Estado restaurado de ${ARQUIVO_ESTADO}`);
 
-      /* 3.4: força bomba DESLIGADA após reboot. Nunca religamos a bomba
-       * por conta de um estado salvo em disco — se estava ligada antes
-       * de uma queda de energia, o operador precisa confirmar
-       * novamente (via modo manual + comando explícito, ou aguardar o
-       * controle automático religar ao cair abaixo do mínimo). */
+      // Força bomba DESLIGADA após reboot: nunca religar a bomba por
+      // conta de um estado salvo em disco — após queda de energia o
+      // operador precisa confirmar novamente (modo manual + comando,
+      // ou aguardar o controle automático religar abaixo do mínimo).
       const restaurado = { ...estadoPadrao, ...salvo };
       restaurado.bombaLigada = false;
       return restaurado;
@@ -72,29 +76,24 @@ let historicoBomba = [];
 let alertas = [];
 let nivelCriticoAtivo = false;
 
-/* Item (e): timestamp da última leitura recebida do ESP32.
- * Inicializado no boot — se o ESP32 não falar em TIMEOUT_ESP32_MS,
- * consideramos que está offline. */
+// Timestamp da última leitura recebida do ESP32. Inicializado no boot —
+// se o ESP32 não falar em TIMEOUT_ESP32_MS, consideramos offline.
 let ultimaLeituraRecebida = Date.now();
 
-/* Item (b): controle da janela de troca de modo.
- * - modoRecemAlterado: true entre /api/modo(manual) e a próxima leitura do ESP32.
- * - comandoManualDesdeTroca: true se o usuário já deu comando de bomba
- *   nessa janela — nesse caso, o comando do usuário vence o eco do ESP32. */
+// Controle da janela de troca de modo:
+// - modoRecemAlterado: true entre /api/modo(manual) e a próxima leitura.
+// - comandoManualDesdeTroca: true se o usuário já deu comando de bomba
+//   nessa janela — nesse caso, o comando do usuário vence o eco do ESP32.
 let modoRecemAlterado = false;
 let comandoManualDesdeTroca = false;
 
-/* Item 4: corte de segurança em modo manual. */
-const LIMITE_SEGURANCA_MANUAL = 98;
-
-/* ---------- Helpers (item c) ---------- */
-
+/* ==================== HELPERS ==================== */
+// Mantém o array com no máximo `max` elementos, descartando os mais antigos.
 function limitarTamanho(arr, max) {
   if (arr.length > max) arr.splice(0, arr.length - max);
 }
 
-/* ---------- Ações do sistema ---------- */
-
+/* ==================== AÇÕES DO SISTEMA ==================== */
 function registrarAcionamento(novoEstado) {
   if (sistema.bombaLigada !== novoEstado) {
     sistema.bombaLigada = novoEstado;
@@ -119,6 +118,8 @@ function registrarAlerta(tipo, mensagem, nivel = null) {
   limitarTamanho(alertas, MAX_ALERTAS_MEMORIA);
 }
 
+// Emite o alerta "nivel_critico" apenas na transição (entrada) para a
+// faixa crítica, evitando spam a cada leitura.
 function verificarNivelCritico() {
   if (sistema.nivel <= sistema.minimo) {
     if (!nivelCriticoAtivo) {
@@ -133,28 +134,27 @@ function verificarNivelCritico() {
 /* =========================================================
  * ESP32 ENVIA LEITURA E RECEBE COMANDO NA MESMA RESPOSTA
  *
- * NOTA (item 7): o ESP32 aplica o comando no próximo POST (~1 s).
- * A UI faz atualização otimista ao clicar, então o usuário percebe a
+ * O ESP32 aplica o comando no próximo POST (~1 s). A UI faz
+ * atualização otimista ao clicar, então o usuário percebe a
  * resposta imediatamente; o relé pode levar até 1 s para acionar.
  * ========================================================= */
 app.post("/api/nivel", (req, res) => {
-  /* Item (e): qualquer POST conta como "ESP32 vivo". */
+  // Qualquer POST conta como "ESP32 vivo" para o watchdog
   ultimaLeituraRecebida = Date.now();
 
   const nivelBruto = req.body.nivel;
   const litrosBruto = req.body.litros;
 
-  /* Item 8 + (a): falha do sensor (−1).
-   * Desliga a bomba por segurança também no estado do SERVIDOR, para que
-   * em modo manual uma recuperação posterior não "ressuscite" a bomba
-   * com base em estado velho. */
+  // Falha do sensor (−1): desliga a bomba também no estado do SERVIDOR
+  // para que, em modo manual, uma recuperação posterior não "ressuscite"
+  // a bomba com base em estado velho.
   if (nivelBruto !== undefined && Number(nivelBruto) === -1) {
     sistema.sensorOK = false;
 
-    /* (a): falha do sensor é motivo de segurança → bomba OFF. */
+    // Falha do sensor é motivo de segurança → bomba OFF
     registrarAcionamento(false);
 
-    /* (b): a janela de troca de modo não sobrevive a uma falha. */
+    // A janela de troca de modo não sobrevive a uma falha
     modoRecemAlterado = false;
     comandoManualDesdeTroca = false;
 
@@ -172,7 +172,7 @@ app.post("/api/nivel", (req, res) => {
   const nivel = Number(nivelBruto);
   const litros = Number(litrosBruto);
 
-  /* Payload realmente malformado → 400. */
+  // Payload realmente malformado → 400
   if (
     nivelBruto === undefined ||
     nivelBruto === null ||
@@ -202,13 +202,11 @@ app.post("/api/nivel", (req, res) => {
   sistema.nivel = nivel;
   sistema.litros = litros;
 
-  /* Item 4: corte de segurança no modo manual.
-   *
-   * (Correção B) Além de desligar, fechamos a janela de modo e marcamos
-   * "comando manual já aplicado" para que o eco do ESP32 — que ainda
-   * pode reportar bombaLigada=true neste POST, pois o corte local no
-   * firmware só ocorre APÓS esta requisição — não reative a bomba no
-   * servidor. Sem isso, o corte era desfeito logo em seguida pelo eco. */
+  // Corte de segurança no modo manual: além de desligar, fecha a janela
+  // de modo e marca "comando manual já aplicado" para que o eco do ESP32
+  // — que ainda pode reportar bombaLigada=true neste POST, pois o corte
+  // local no firmware só ocorre APÓS esta requisição — não reative a
+  // bomba no servidor. Sem isso, o corte era desfeito pelo eco.
   if (
     sistema.modo === "manual" &&
     sistema.bombaLigada &&
@@ -224,15 +222,11 @@ app.post("/api/nivel", (req, res) => {
     comandoManualDesdeTroca = true;
   }
 
-  /* =========================================================
-   * (b) + correção do modo manual:
-   *
-   * - AUTOMÁTICO: ESP32 é fonte da verdade — aceita eco sempre.
-   * - MANUAL, primeira leitura após troca e SEM comando do usuário:
-   *   aceita o eco do ESP32 (é o estado físico atual; o servidor
-   *   não tem informação mais recente que isso).
-   * - MANUAL, demais casos: usuário é fonte da verdade — ignora eco.
-   * ========================================================= */
+  // Regras de quem é a fonte da verdade para o estado da bomba:
+  // - AUTOMÁTICO: ESP32 é a fonte — aceita eco sempre.
+  // - MANUAL, primeira leitura após troca e SEM comando do usuário:
+  //   aceita o eco do ESP32 (estado físico atual).
+  // - MANUAL, demais casos: usuário é a fonte — ignora eco.
   if (typeof req.body.bombaLigada === "boolean") {
     if (sistema.modo === "automatico") {
       registrarAcionamento(req.body.bombaLigada);
@@ -241,12 +235,11 @@ app.post("/api/nivel", (req, res) => {
     }
   }
 
-  /* A janela de troca de modo dura exatamente uma leitura. */
+  // A janela de troca de modo dura exatamente uma leitura
   modoRecemAlterado = false;
   comandoManualDesdeTroca = false;
 
-  /* Item (c): limitar histórico em memória.
-   * Item (d): incluir bomba e modo no registro histórico. */
+  // Registra leitura no histórico (limita tamanho, inclui bomba e modo)
   historico.push({
     nivel: sistema.nivel,
     litros: sistema.litros,
@@ -258,7 +251,7 @@ app.post("/api/nivel", (req, res) => {
 
   verificarNivelCritico();
 
-  // PIGGYBACK: devolve o comando junto com o ACK da leitura.
+  // PIGGYBACK: devolve o comando junto com o ACK da leitura
   res.json({
     sucesso: true,
     modo: sistema.modo,
@@ -268,7 +261,8 @@ app.post("/api/nivel", (req, res) => {
   });
 });
 
-/* Rota de comando isolada — mantida apenas para debug (curl). */
+/* ==================== CONSULTA E COMANDO ==================== */
+// Rota de comando isolada — mantida apenas para debug (curl)
 app.get("/api/comando", (req, res) => {
   res.json({
     bombaLigada: sistema.bombaLigada,
@@ -282,7 +276,7 @@ app.get("/api/status", (req, res) => {
   res.json(sistema);
 });
 
-/* Item (c): nunca devolver o array inteiro. */
+// Nunca devolver o array inteiro — apenas a janela servida à UI
 app.get("/api/historico", (req, res) => {
   res.json(historico.slice(-HISTORICO_RESPOSTA));
 });
@@ -308,13 +302,12 @@ app.post("/api/bomba", (req, res) => {
     });
   }
 
-  /* 3.3: nunca aceita ligar acima do limite de segurança universal.
-   * Antes, /api/bomba só checava sistema.maximo — se o usuário
-   * configurasse maximo=100, um comando de ligar em nível ≥ 98 era
-   * aceito e, na leitura seguinte, o firmware derrubava o relé. Entre
-   * o clique e a próxima leitura, /api/status reportava bombaLigada=true
-   * com o relé ainda aberto (a janela de ~1 s). Bloqueando o comando
-   * na origem, essa janela desaparece nesse caso crítico. */
+  // Nunca aceita ligar acima do limite de segurança universal. Antes,
+  // a rota só checava sistema.maximo — se maximo=100 fosse configurado,
+  // ligar em nível ≥ 98 era aceito e, na leitura seguinte, o firmware
+  // derrubava o relé. Entre o clique e a próxima leitura, /api/status
+  // reportava bombaLigada=true com o relé ainda aberto (janela ~1 s).
+  // Bloqueando o comando na origem, essa janela desaparece.
   if (req.body.ligar && sistema.nivel >= LIMITE_SEGURANCA_MANUAL) {
     return res.status(400).json({
       erro: `Bomba não pode ser ligada. Limite de segurança atingido (≥ ${LIMITE_SEGURANCA_MANUAL}%).`,
@@ -329,7 +322,7 @@ app.post("/api/bomba", (req, res) => {
 
   registrarAcionamento(req.body.ligar);
 
-  /* (b): a partir daqui, o comando do usuário vence o eco do ESP32. */
+  // A partir daqui, o comando do usuário vence o eco do ESP32
   comandoManualDesdeTroca = true;
 
   res.json(sistema);
@@ -347,7 +340,7 @@ app.post("/api/modo", (req, res) => {
   sistema.modo = modo;
   salvarEstadoAgora();
 
-  /* (b): abre a janela para a primeira leitura após a troca. */
+  // Abre a janela para a primeira leitura após a troca
   if (modo === "manual") {
     modoRecemAlterado = true;
     comandoManualDesdeTroca = false;
@@ -378,11 +371,9 @@ app.post("/api/limites", (req, res) => {
   res.json(sistema);
 });
 
-/* =========================================================
- * Item (e): watchdog de comunicação com o ESP32.
- * Se ficarmos TIMEOUT_ESP32_MS sem nenhum POST de leitura, marcamos
- * sensorOK=false para que o banner do dashboard alerte o usuário.
- * ========================================================= */
+/* ==================== WATCHDOG E PERSISTÊNCIA ==================== */
+// Se ficarmos TIMEOUT_ESP32_MS sem nenhum POST de leitura, marca
+// sensorOK=false para que o banner do dashboard alerte o usuário.
 setInterval(() => {
   const silencioMs = Date.now() - ultimaLeituraRecebida;
   if (silencioMs <= TIMEOUT_ESP32_MS) return;
@@ -400,7 +391,7 @@ setInterval(() => {
   );
 }, INTERVALO_WATCHDOG_MS);
 
-/* Item 5: garante persistência periódica e em shutdown. */
+// Persistência periódica e em shutdown
 setInterval(salvarEstadoAgora, 60000);
 
 process.on("SIGINT", () => {

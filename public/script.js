@@ -1,6 +1,6 @@
 /* Monitoramento do nível de água - AquaLevel */
 
-/* 1. VARIÁVEIS */
+/* ==================== VARIÁVEIS DE ESTADO ==================== */
 
 let modo = "automatico";
 let nivel = 72;
@@ -22,7 +22,7 @@ const ALTURA_UTIL_CM = ALTURA_RESERVATORIO_CM - GAP_SENSOR_CM;
    quando o nível cair a 0 momentaneamente. */
 let capacidadeLitrosConhecida = null;
 
-/* 2. ELEMENTOS HTML */
+/* ==================== ELEMENTOS HTML ==================== */
 
 const percentual = document.getElementById("percentual");
 const litros = document.getElementById("litros");
@@ -44,24 +44,23 @@ const listaAlertas = document.getElementById("listaAlertas");
 const alertasDashboard = document.getElementById("alertas");
 const eventosDashboard = document.getElementById("eventos");
 
-/* Campos antes estáticos (bug de UI): capacidade total e altura da água */
+/* Capacidade total e altura da água — preenchidos dinamicamente */
 const capacidadeEl = document.getElementById("capacidadeLitros");
 const alturaEl = document.getElementById("altura");
 
-/* ISSUE #23 */
-
+/* Elementos da página Configurações */
 const minimoConfiguracao = document.getElementById("minimoConfiguracao");
 const maximoConfiguracao = document.getElementById("maximoConfiguracao");
 const modoConfiguracao = document.getElementById("modoConfiguracao");
 
-/* Banda de operação (substitui a antiga "Histerese 5%" fixa) */
+/* Banda de operação (diferença entre máximo e mínimo) */
 const bandaValue = document.getElementById("bandaValue");
 const bandaConfiguracao = document.getElementById("bandaConfiguracao");
 
 /* Aviso de falha do sensor */
 const sensorBanner = document.getElementById("sensorBanner");
 
-/* ACESSIBILIDADE */
+/* ==================== ACESSIBILIDADE ==================== */
 
 const diminuirFonte = document.getElementById("diminuirFonte");
 const aumentarFonte = document.getElementById("aumentarFonte");
@@ -71,6 +70,8 @@ let tamanhoFonte = Number(localStorage.getItem("aqualevelFonte")) || 100;
 
 let contrasteAtivo = localStorage.getItem("aqualevelContraste") === "true";
 
+/* Aplica tamanho de fonte e alto contraste a partir do estado em memória,
+   sincronizando localStorage, atributos ARIA e classes do body. */
 function aplicarAcessibilidade() {
   document.documentElement.style.fontSize = tamanhoFonte + "%";
 
@@ -111,11 +112,14 @@ alternarContraste.addEventListener("click", () => {
 
 aplicarAcessibilidade();
 
-/* 3. NAVEGAÇÃO */
+/* ==================== NAVEGAÇÃO (SPA) ==================== */
 
 const navLinks = document.querySelectorAll(".nav-link");
 const pages = document.querySelectorAll(".page");
 
+/* Troca de página: alterna .active-page no <main> alvo e .active no link,
+   e dispara cargas específicas de cada página (histórico, alertas,
+   configurações, dashboard). */
 navLinks.forEach((link) => {
   link.addEventListener("click", () => {
     const pageId = link.dataset.page;
@@ -152,8 +156,8 @@ navLinks.forEach((link) => {
   });
 });
 
-/* 3.2: indicador de conexão do topo — deixa de ser hardcoded.
- * Estados:
+/* ==================== INDICADOR DE CONEXÃO ==================== */
+/* Reflete o estado real da conexão no topo:
  *   - "online"           → servidor ok, ESP32 reportando, sensor ok
  *   - "sensor_falha"     → servidor responde, mas sensorOK=false
  *                          (falha do HC-SR04 ou ESP32 silencioso)
@@ -180,7 +184,7 @@ function atualizarIndicadorConexao(estado) {
   }
 }
 
-/* 4. ATUALIZAR INTERFACE */
+/* ==================== ATUALIZAR INTERFACE ==================== */
 
 function atualizarDashboard() {
   percentual.textContent = nivel + "%";
@@ -243,7 +247,7 @@ function atualizarDashboard() {
       modo === "automatico" ? "Automático" : "Manual";
   }
 
-  /* ISSUE #23 - CONFIGURAÇÕES */
+  /* Página Configurações */
 
   if (minimoConfiguracao) {
     minimoConfiguracao.textContent = minimo + "%";
@@ -290,7 +294,7 @@ function atualizarDashboard() {
   desligarBomba.disabled = modo !== "manual";
 }
 
-/* 5. LIGAR BOMBA */
+/* ==================== LIGAR BOMBA ==================== */
 
 ligarBomba.addEventListener("click", async () => {
   if (modo !== "manual") {
@@ -330,7 +334,7 @@ ligarBomba.addEventListener("click", async () => {
   }
 });
 
-/* 6. DESLIGAR BOMBA */
+/* ==================== DESLIGAR BOMBA ==================== */
 
 desligarBomba.addEventListener("click", async () => {
   if (modo !== "manual") {
@@ -364,7 +368,7 @@ desligarBomba.addEventListener("click", async () => {
   }
 });
 
-/* 7. MODO AUTOMÁTICO */
+/* ==================== MODO AUTOMÁTICO ==================== */
 
 btnAutomatico.addEventListener("click", async () => {
   try {
@@ -393,7 +397,7 @@ btnAutomatico.addEventListener("click", async () => {
   }
 });
 
-/* 8. MODO MANUAL */
+/* ==================== MODO MANUAL ==================== */
 
 btnManual.addEventListener("click", async () => {
   try {
@@ -422,7 +426,7 @@ btnManual.addEventListener("click", async () => {
   }
 });
 
-/* 9. MOSTRAR LIMITES */
+/* ==================== MOSTRAR LIMITES (sliders) ==================== */
 
 inputMin.addEventListener("input", () => {
   minValue.textContent = inputMin.value;
@@ -432,7 +436,7 @@ inputMax.addEventListener("input", () => {
   maxValue.textContent = inputMax.value;
 });
 
-/* 10. SALVAR LIMITES */
+/* ==================== SALVAR LIMITES ==================== */
 
 salvarLimites.addEventListener("click", async () => {
   const novoMinimo = Number(inputMin.value);
@@ -477,7 +481,7 @@ salvarLimites.addEventListener("click", async () => {
   }
 });
 
-/* 11. GRÁFICO - ISSUE #25 */
+/* ==================== GRÁFICO DE NÍVEL ==================== */
 
 const ctx = document.getElementById("graficoNivel");
 
@@ -510,8 +514,7 @@ const grafico = new Chart(ctx, {
   },
 });
 
-/* ATUALIZAR GRÁFICO COM O HISTÓRICO */
-
+/* Atualiza o gráfico com as 20 medições mais recentes do histórico */
 async function atualizarGrafico() {
   try {
     const resposta = await fetch("/api/historico");
@@ -530,8 +533,6 @@ async function atualizarGrafico() {
 
       return;
     }
-
-    /* Exibe as 20 medições mais recentes */
 
     const registros = historico.slice(-20);
 
@@ -556,7 +557,7 @@ async function atualizarGrafico() {
   }
 }
 
-/* 12. BUSCAR DADOS DO SERVIDOR */
+/* ==================== BUSCAR DADOS DO SERVIDOR ==================== */
 
 async function buscarDados() {
   try {
@@ -577,12 +578,12 @@ async function buscarDados() {
     maximo = dados.maximo;
     modo = dados.modo;
 
-    /* Item 6: exibe aviso quando o sensor reportou falha (sensorOK=false). */
+    /* Exibe o banner quando o sensor reportou falha (sensorOK=false) */
     if (sensorBanner) {
       sensorBanner.classList.toggle("hidden", dados.sensorOK !== false);
     }
 
-    /* 3.2: reflete o estado real no indicador do topo. */
+    /* Reflete o estado real no indicador do topo */
     atualizarIndicadorConexao(
       dados.sensorOK === false ? "sensor_falha" : "online",
     );
@@ -590,12 +591,12 @@ async function buscarDados() {
     atualizarDashboard();
   } catch (erro) {
     console.error("Erro de comunicação:", erro);
-    /* 3.2: servidor inacessível — também atualiza o topo. */
+    /* Servidor inacessível — também atualiza o indicador do topo */
     atualizarIndicadorConexao("servidor_offline");
   }
 }
 
-/* 13. ATUALIZAÇÃO AUTOMÁTICA */
+/* ==================== ATUALIZAÇÃO AUTOMÁTICA ==================== */
 
 setInterval(() => {
   buscarDados();
@@ -605,13 +606,15 @@ setInterval(() => {
   buscarUltimosEventos();
 }, 5000);
 
-/* 14. PRIMEIRA BUSCA */
+/* ==================== CHAMADAS INICIAIS ==================== */
+/* Disparam a primeira carga de dados; o hoisting de function declarations
+   permite referenciar funções definidas mais abaixo. */
 
 buscarDados();
 atualizarGrafico();
 buscarUltimosEventos();
 
-/* 15. HISTÓRICO DE MEDIÇÕES - ISSUE #19 */
+/* ==================== HISTÓRICO DE MEDIÇÕES ==================== */
 
 async function buscarHistorico() {
   if (!tabelaHistorico) {
@@ -695,12 +698,14 @@ async function buscarHistorico() {
   }
 }
 
-/* 16. PRIMEIRA BUSCA DO HISTÓRICO */
+/* ==================== CHAMADA INICIAL DO HISTÓRICO ==================== */
 
 buscarHistorico();
 
-/* 17. ALERTAS - ISSUE #21 */
+/* ==================== ALERTAS ==================== */
 
+/* Renderiza um alerta como HTML. `mostrarData` controla se data/hora
+   aparecem (página Alertas) ou não (widget compacto do dashboard). */
 function criarAlertaHTML(alerta, mostrarData = false) {
   const dataHora = new Date(alerta.dataHora);
 
@@ -774,6 +779,7 @@ async function buscarAlertas() {
       });
     }
 
+    /* No dashboard, mostra apenas os 2 alertas mais recentes */
     if (alertasDashboard) {
       alertasOrdenados.slice(0, 2).forEach((alerta) => {
         alertasDashboard.innerHTML += criarAlertaHTML(alerta, false);
@@ -792,11 +798,11 @@ async function buscarAlertas() {
   }
 }
 
-/* 18. PRIMEIRA BUSCA DOS ALERTAS */
+/* ==================== CHAMADA INICIAL DOS ALERTAS ==================== */
 
 buscarAlertas();
 
-/* 19. ÚLTIMOS EVENTOS DA BOMBA - ISSUE #27 */
+/* ==================== ÚLTIMOS EVENTOS DA BOMBA ==================== */
 
 function criarEventoBombaHTML(evento) {
   const dataHora = new Date(evento.dataHora);
@@ -847,6 +853,7 @@ async function buscarUltimosEventos() {
       return;
     }
 
+    /* Ordena do mais recente para o mais antigo e exibe os 5 últimos */
     const eventosOrdenados = historicoBomba
       .slice()
       .sort((a, b) => new Date(b.dataHora) - new Date(a.dataHora));
