@@ -302,7 +302,9 @@ header p {
 
 /* ==================== TANQUE ==================== */
 /* .agua tem height controlada por script.js (nivel + "%").
-   A transição anima a subida/descida do nível entre leituras. */
+   A transição anima a subida/descida do nível entre leituras.
+   O valor inicial 0% reflete "sem leitura ainda" — script.js
+   sobrescreve com o nível real na primeira resposta do servidor. */
 
 .tanque {
     width: 150px;
@@ -319,7 +321,7 @@ header p {
     bottom: 0;
     left: 0;
     width: 100%;
-    height: 72%;
+    height: 0%; /* ← era 72% (placeholder falso) */
     background: #2990e8;
     transition: height 0.5s;
 }

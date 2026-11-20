@@ -165,6 +165,13 @@ void atualizarLedsNivel(float nivel) {
  *   - envia a leitura (nivel, litros, bombaLigada) no POST
  *   - recebe o comando (modo, minimo, maximo, bombaLigada) na resposta
  * Retorna true se a troca foi bem-sucedida.
+ *
+ * O payload é montado com JsonDocument + serializeJson em vez de
+ * concatenação encadeada de String(). Cada `+` de String aloca um
+ * buffer temporário no heap; com uma requisição por segundo durante
+ * horas, isso fragmenta a memória. O JsonDocument faz uma única
+ * alocação de pool e serializeJson escreve direto num String, com
+ * padrão de alocação mais previsível.
  * ================================================================ */
 bool enviarDadosParaServidor(float nivel, float litros) {
   if (WiFi.status() != WL_CONNECTED) return false;
@@ -180,9 +187,16 @@ bool enviarDadosParaServidor(float nivel, float litros) {
   }
   http.addHeader("Content-Type", "application/json");
 
-  String payload = String("{\"nivel\":") + String(nivel, 2) +
-    ",\"litros\":" + String(litros, 1) +
-    ",\"bombaLigada\":" + (STATUS_BOMBA ? "true" : "false") + "}";
+  // Serialização estruturada do payload de envio.
+  // ArduinoJson 7.x: JsonDocument
+  // ArduinoJson 6.x: troque por StaticJsonDocument<128> payloadDoc;
+  JsonDocument payloadDoc;
+  payloadDoc["nivel"]      = nivel;
+  payloadDoc["litros"]     = litros;
+  payloadDoc["bombaLigada"] = STATUS_BOMBA;
+
+  String payload;
+  serializeJson(payloadDoc, payload);
 
   int httpCode = http.POST(payload);
   bool ok = false;
@@ -237,6 +251,8 @@ void enviarFalhaParaServidor() {
   }
   http.addHeader("Content-Type", "application/json");
 
+  // Payload constante — String literal não fragmenta o heap de forma
+  // relevante (uma alocação por chamada, sem concatenação encadeada).
   String payload = "{\"nivel\":-1,\"litros\":0,\"bombaLigada\":false}";
   http.POST(payload);
   http.end();
@@ -313,7 +329,17 @@ void loop() {
   //    A resposta pode alterar modoAtual, nivelMinimo, nivelMaximo e,
   //    em modo manual, aplicar um comando do usuário.
   float litros = nivel * CAPACIDADE_LITROS / 100.0f;
-  enviarDadosParaServidor(nivel, litros);
+  bool comunicacaoServidorOK = enviarDadosParaServidor(nivel, litros);
+
+  // Em modo manual, a autorização do servidor é necessária para manter
+  // a bomba ligada. Qualquer falha na comunicação derruba o relé neste
+  // mesmo ciclo; não aguardamos o timeout do watchdog do backend.
+  if (!comunicacaoServidorOK && modoAtual == "manual" && STATUS_BOMBA) {
+    Serial.println(
+                   "Servidor indisponivel: bomba DESLIGADA no modo manual devido a queda do servidor."
+                  );
+    acionarBomba(false);
+  }
 
   // 4) CORTE DE SEGURANÇA UNIVERSAL — pós-POST, para vencer qualquer
   //    comando (inclusive manual) recebido no passo anterior.

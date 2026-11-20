@@ -3,17 +3,21 @@
 /* ==================== VARIÁVEIS DE ESTADO ==================== */
 
 let modo = "automatico";
-let nivel = 72;
-let litrosAtual = 720; // valor autoritativo vindo do servidor (dados.litros)
-let bombaLigada = true;
+let nivel = 0; // 0 até a primeira leitura do servidor
+let litrosAtual = 0; // valor autoritativo vindo do servidor (dados.litros)
+let bombaLigada = false; // false até a primeira leitura do servidor
 let minimo = 30;
 let maximo = 90;
+let ultimaMedicaoDataHora = null;
 
-/* Constantes espelhadas de rest.ino — manter em sincronia com o firmware.
+/* Constantes espelhadas de base.ino — manter em sincronia com o firmware.
    ALTURA_RESERVATORIO_CM: distância sensor→fundo (tanque vazio).
    GAP_SENSOR_CM: distância mínima sensor↔água (tanque cheio).
-   A altura útil (curso da água do vazio ao cheio) é a diferença. */
-const ALTURA_RESERVATORIO_CM = 22.5;
+   A altura útil (curso da água do vazio ao cheio) é a diferença.
+   Estes valores DEVEM coincidir com os do base.ino — o firmware é a
+   verdade operacional (é ele que fecha/abre o relé com base nesses
+   números), e o dashboard apenas reflete a mesma conta. */
+const ALTURA_RESERVATORIO_CM = 23.6;
 const GAP_SENSOR_CM = 5.0;
 const ALTURA_UTIL_CM = ALTURA_RESERVATORIO_CM - GAP_SENSOR_CM;
 
@@ -119,7 +123,7 @@ const pages = document.querySelectorAll(".page");
 
 /* Troca de página: alterna .active-page no <main> alvo e .active no link,
    e dispara cargas específicas de cada página (histórico, alertas,
-   configurações, dashboard). */
+   configurações, dashboard, relatórios). */
 navLinks.forEach((link) => {
   link.addEventListener("click", () => {
     const pageId = link.dataset.page;
@@ -150,6 +154,11 @@ navLinks.forEach((link) => {
     if (pageId === "dashboard") {
       atualizarGrafico();
       buscarUltimosEventos();
+      buscarEstatisticas();
+    }
+
+    if (pageId === "relatorios") {
+      buscarEstatisticas();
     }
 
     window.scrollTo(0, 0);
@@ -214,10 +223,16 @@ function atualizarDashboard() {
   bombaStatus.textContent = bombaLigada ? "Ligada" : "Desligada";
   bombaStatus.style.color = bombaLigada ? "#27a355" : "#ef4040";
 
-  const agora = new Date().toLocaleTimeString();
-
-  ultimaMedicao.textContent = agora;
-  horaAtualizacao.textContent = agora;
+  // Última medição vem do timestamp da última leitura válida recebida
+  // pelo backend. Atualização da interface é um relógio separado.
+  const ultimaMedicaoData = ultimaMedicaoDataHora
+    ? new Date(ultimaMedicaoDataHora)
+    : null;
+  ultimaMedicao.textContent =
+    ultimaMedicaoData && !Number.isNaN(ultimaMedicaoData.getTime())
+      ? ultimaMedicaoData.toLocaleTimeString("pt-BR")
+      : "--:--:--";
+  horaAtualizacao.textContent = new Date().toLocaleTimeString("pt-BR");
 
   const nivelStatus = document.getElementById("nivelStatus");
 
@@ -292,6 +307,55 @@ function atualizarDashboard() {
 
   ligarBomba.disabled = modo !== "manual";
   desligarBomba.disabled = modo !== "manual";
+}
+
+/* ==================== FORMATAÇÃO DE ESTATÍSTICAS ==================== */
+
+function formatarPercentual(valor) {
+  return valor !== null && valor !== undefined ? Math.round(valor) + "%" : "--";
+}
+
+function formatarLitros(valor) {
+  return valor !== null && valor !== undefined
+    ? Math.round(valor) + " litros"
+    : "--";
+}
+
+function formatarNumero(valor) {
+  return valor !== null && valor !== undefined ? String(valor) : "--";
+}
+
+/* ==================== ESTATÍSTICAS (dashboard + relatórios) ==================== */
+
+async function buscarEstatisticas() {
+  try {
+    const resposta = await fetch("/api/estatisticas");
+
+    if (!resposta.ok) {
+      throw new Error("Erro ao buscar estatísticas.");
+    }
+
+    const stats = await resposta.json();
+
+    const set = (id, valor) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = valor;
+    };
+
+    /* Widgets do dashboard (bloco "HISTÓRICO DO NÍVEL") */
+    set("statsNivelMedio", formatarPercentual(stats.nivelMedio));
+    set("statsNivelMaximo", formatarPercentual(stats.nivelMaximo));
+    set("statsNivelMinimo", formatarPercentual(stats.nivelMinimo));
+    set("statsConsumo", formatarLitros(stats.consumoEstimado));
+
+    /* Página Relatórios */
+    set("reportNivelMedio", formatarPercentual(stats.nivelMedio));
+    set("reportNivelMaximo", formatarPercentual(stats.nivelMaximo));
+    set("reportNivelMinimo", formatarPercentual(stats.nivelMinimo));
+    set("reportAcionamentos", formatarNumero(stats.acionamentos));
+  } catch (erro) {
+    console.error("Erro ao carregar estatísticas:", erro);
+  }
 }
 
 /* ==================== LIGAR BOMBA ==================== */
@@ -436,11 +500,102 @@ inputMax.addEventListener("input", () => {
   maxValue.textContent = inputMax.value;
 });
 
+/* ==================== BLUR ROBUSTO DOS SLIDERS ====================
+ * Objetivo: eliminar a janela em que o slider arrastado diverge do
+ * valor autoritativo (minimo/maximo) por até 5s, SEM quebrar o fluxo
+ * de "Salvar limites".
+ *
+ * Desafio: `blur` do slider dispara ANTES do `click` do botão Salvar.
+ * Se resetarmos incondicionalmente no blur, o click leria o valor
+ * recém-resetado (antigo) e o usuário perderia a mudança.
+ *
+ * Estratégia em quatro camadas:
+ *
+ * 1. Flag `salvarLimitesPendente`: setada no `mousedown` ou no
+ *    `keydown` Enter/Espaço do botão Salvar. Como mousedown/keydown
+ *    disparam ANTES do blur, o flag já está true quando o blur roda.
+ *
+ * 2. Checagem de `e.relatedTarget` no blur: se o foco está indo para
+ *    o próprio botão Salvar (ex.: navegação por Tab + Enter), pula o
+ *    reset. Cobre o caminho de teclado puro.
+ *
+ * 3. Blur forçado via listener de mousedown no documento: cobre o
+ *    caso de clique em área não-focável (ex.: espaço vazio do card).
+ *    Sem isso, o slider mantém o foco (o polling pula a sincronização
+ *    porque activeElement === slider) e o valor arrastado persiste
+ *    indefinidamente.
+ *
+ * 4. Reset da flag no `mouseup` global: cobre o cenário em que o
+ *    usuário dá mousedown no botão Salvar, arrasta o mouse para fora
+ *    antes de soltar (sem gerar click). Sem este reset, a flag
+ *    permaneceria true indefinidamente, e o próximo blur de slider
+ *    pularia o reset indevidamente. O mouseup precede o click no
+ *    fluxo normal, então a flag está false no click handler — mas o
+ *    click handler não depende da flag, só lê input.value.
+ * ================================================================ */
+let salvarLimitesPendente = false;
+
+salvarLimites.addEventListener("mousedown", () => {
+  salvarLimitesPendente = true;
+});
+
+salvarLimites.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    salvarLimitesPendente = true;
+  }
+});
+
+/* Reset global no mouseup: o fluxo de click é
+   mousedown → blur (skip via flag) → mouseup → click.
+   Limpar aqui garante que, se o usuário abortou o clique (drag-out),
+   a flag não fique presa — o próximo blur voltará a resetar. Se o
+   usuário completou o clique, o handler de click já terá rodado
+   (lendo input.value antes de qualquer efeito desta limpeza). */
+document.addEventListener("mouseup", () => {
+  salvarLimitesPendente = false;
+});
+
+function resetarSliderSeAplicavel(input, valorAutoritativo, spanValue, e) {
+  if (salvarLimitesPendente) return;
+  if (e && e.relatedTarget === salvarLimites) return;
+  input.value = valorAutoritativo;
+  spanValue.textContent = valorAutoritativo;
+}
+
+inputMin.addEventListener("blur", (e) => {
+  resetarSliderSeAplicavel(inputMin, minimo, minValue, e);
+});
+
+inputMax.addEventListener("blur", (e) => {
+  resetarSliderSeAplicavel(inputMax, maximo, maxValue, e);
+});
+
+/* Força o blur dos sliders quando o usuário clica fora deles e fora
+   do botão Salvar. Sem isso, cliques em áreas não-focáveis não
+   disparam blur nativo, e o slider ficaria "preso" com o valor
+   arrastado (o polling não sincroniza enquanto o slider tem foco).
+
+   Usa `salvarLimites.contains(e.target)` em vez de `===` para cobrir
+   o caso em que o botão Salvar venha a ter elementos filhos (ícone,
+   <span> etc.) — nesse cenário, `e.target` seria o filho, não o
+   botão, e a comparação direta deixaria de funcionar. */
+document.addEventListener("mousedown", (e) => {
+  if (e.target === inputMin || e.target === inputMax) return;
+  if (salvarLimites.contains(e.target)) return;
+  if (document.activeElement === inputMin) inputMin.blur();
+  if (document.activeElement === inputMax) inputMax.blur();
+});
+
 /* ==================== SALVAR LIMITES ==================== */
 
 salvarLimites.addEventListener("click", async () => {
   const novoMinimo = Number(inputMin.value);
   const novoMaximo = Number(inputMax.value);
+
+  /* Libera o flag para que blurs futuros voltem a resetar normalmente.
+     Feito antes do await para não deixar o flag "vazado" durante a
+     requisição. */
+  salvarLimitesPendente = false;
 
   if (novoMinimo >= novoMaximo) {
     alert("O limite mínimo deve ser menor que o máximo.");
@@ -570,6 +725,7 @@ async function buscarDados() {
     const dados = await resposta.json();
 
     nivel = dados.nivel;
+    ultimaMedicaoDataHora = dados.ultimaLeituraDataHora || null;
     /* Litros autoritativos vêm do servidor (calculados no ESP32 com
        CAPACIDADE_LITROS). Não assumimos mais "nivel * 10". */
     litrosAtual = Number(dados.litros) || 0;
@@ -604,6 +760,10 @@ setInterval(() => {
   atualizarGrafico();
 
   buscarUltimosEventos();
+
+  buscarEstatisticas();
+
+  buscarAlertas();
 }, 5000);
 
 /* ==================== CHAMADAS INICIAIS ==================== */
@@ -613,6 +773,7 @@ setInterval(() => {
 buscarDados();
 atualizarGrafico();
 buscarUltimosEventos();
+buscarEstatisticas();
 
 /* ==================== HISTÓRICO DE MEDIÇÕES ==================== */
 
@@ -743,58 +904,67 @@ function criarAlertaHTML(alerta, mostrarData = false) {
 
 async function buscarAlertas() {
   try {
-    const resposta = await fetch("/api/alertas");
+    const [respostaAtivos, respostaHistorico] = await Promise.all([
+      fetch("/api/alertas/ativos"),
+      fetch("/api/alertas"),
+    ]);
 
-    if (!resposta.ok) {
+    if (!respostaAtivos.ok || !respostaHistorico.ok) {
       throw new Error("Erro ao buscar alertas.");
     }
 
-    const alertas = await resposta.json();
+    const alertasAtivos = await respostaAtivos.json();
+    const historicoAlertas = await respostaHistorico.json();
+
+    if (listaAlertas) listaAlertas.innerHTML = "";
+    if (alertasDashboard) alertasDashboard.innerHTML = "";
 
     if (listaAlertas) {
-      listaAlertas.innerHTML = "";
+      listaAlertas.innerHTML = "<h4>Alertas ativos</h4>";
+      if (alertasAtivos.length === 0) {
+        listaAlertas.innerHTML += "<p>Nenhum alerta ativo.</p>";
+      } else {
+        alertasAtivos
+          .slice()
+          .reverse()
+          .forEach((alerta) => {
+            listaAlertas.innerHTML += criarAlertaHTML(alerta, true);
+          });
+      }
+
+      listaAlertas.innerHTML +=
+        '<h4 class="alert-history-title">Histórico de alertas</h4>';
+      if (historicoAlertas.length === 0) {
+        listaAlertas.innerHTML += "<p>Nenhum alerta registrado.</p>";
+      } else {
+        historicoAlertas
+          .slice()
+          .reverse()
+          .forEach((alerta) => {
+            listaAlertas.innerHTML += criarAlertaHTML(alerta, true);
+          });
+      }
     }
 
     if (alertasDashboard) {
-      alertasDashboard.innerHTML = "";
-    }
-
-    if (alertas.length === 0) {
-      if (listaAlertas) {
-        listaAlertas.innerHTML = "<p>Nenhum alerta registrado.</p>";
-      }
-
-      if (alertasDashboard) {
+      if (alertasAtivos.length === 0) {
         alertasDashboard.innerHTML = "<p>Nenhum alerta ativo.</p>";
+      } else {
+        alertasAtivos
+          .slice()
+          .reverse()
+          .slice(0, 2)
+          .forEach((alerta) => {
+            alertasDashboard.innerHTML += criarAlertaHTML(alerta, false);
+          });
       }
-
-      return;
-    }
-
-    const alertasOrdenados = alertas.slice().reverse();
-
-    if (listaAlertas) {
-      alertasOrdenados.forEach((alerta) => {
-        listaAlertas.innerHTML += criarAlertaHTML(alerta, true);
-      });
-    }
-
-    /* No dashboard, mostra apenas os 2 alertas mais recentes */
-    if (alertasDashboard) {
-      alertasOrdenados.slice(0, 2).forEach((alerta) => {
-        alertasDashboard.innerHTML += criarAlertaHTML(alerta, false);
-      });
     }
   } catch (erro) {
     console.error("Erro ao carregar alertas:", erro);
-
-    if (listaAlertas) {
+    if (listaAlertas)
       listaAlertas.innerHTML = "<p>Erro ao carregar os alertas.</p>";
-    }
-
-    if (alertasDashboard) {
+    if (alertasDashboard)
       alertasDashboard.innerHTML = "<p>Erro ao carregar os alertas.</p>";
-    }
   }
 }
 

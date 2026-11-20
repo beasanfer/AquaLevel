@@ -8,8 +8,10 @@
         <!-- Estilos globais da aplicação -->
         <link rel="stylesheet" href="style.css" />
 
-        <!-- Chart.js (CDN) — usado no gráfico de histórico do nível -->
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <!-- Chart.js servido de node_modules via /vendor/chartjs
+             (rota estática definida em server.js). Sem CDN, funciona
+             offline. O arquivo vem do pacote npm `chart.js` (v4+). -->
+        <script src="/vendor/chartjs/chart.umd.min.js"></script>
     </head>
 
     <body>
@@ -109,7 +111,7 @@
                 </div>
 
                 <div class="update">
-                    Última atualização:
+                    Interface atualizada:
                     <strong id="horaAtualizacao">--:--:--</strong>
                 </div>
             </header>
@@ -129,9 +131,9 @@
 
                     <div class="nivel-content">
                         <div class="gauge">
-                            <div id="percentual">72%</div>
-                            <span id="litros">720 litros</span>
-                            <p>● <span id="nivelStatus">Nível normal</span></p>
+                            <div id="percentual">--</div>
+                            <span id="litros">-- litros</span>
+                            <p>● <span id="nivelStatus">--</span></p>
                         </div>
 
                         <div class="tanque">
@@ -147,7 +149,7 @@
 
                         <span>
                             Altura da água
-                            <strong id="altura">72 cm</strong>
+                            <strong id="altura">-- cm</strong>
                         </span>
 
                         <span>
@@ -161,14 +163,14 @@
                 <article class="card bomba-card">
                     <h3>BOMBA</h3>
 
-                    <h2 id="bombaStatus">Ligada</h2>
+                    <h2 id="bombaStatus">--</h2>
 
-                    <p class="bomba-descricao">Funcionando normalmente</p>
+                    <p class="bomba-descricao">Aguardando leitura...</p>
 
                     <div class="bomba-info">
                         <div>
                             <span>Acionamento</span>
-                            <strong id="acionamentoBomba">Automático</strong>
+                            <strong id="acionamentoBomba">--</strong>
                         </div>
                     </div>
                 </article>
@@ -232,11 +234,18 @@
                             <label>Nível máximo</label>
                             <h2><span id="maxValue">90</span>%</h2>
 
+                            <!-- max="97" reflete a trava de coerência com
+                                 o firmware (NIVEL_CORTE_SEGURANCA = 98%):
+                                 o servidor rejeita maximo > 97, então o
+                                 slider nunca deve permitir arrastar até
+                                 98/99/100. Se um estado.json legado tinha
+                                 maximo = 100, o clamp em carregarEstado()
+                                 normaliza para 97 no boot. -->
                             <input
                                 id="maximo"
                                 type="range"
                                 min="0"
-                                max="100"
+                                max="97"
                                 value="90"
                                 aria-label="Nível máximo"
                             />
@@ -268,22 +277,22 @@
                     <div class="statistics">
                         <div>
                             Nível médio
-                            <strong>58%</strong>
+                            <strong id="statsNivelMedio">--</strong>
                         </div>
 
                         <div>
                             Nível máximo
-                            <strong>95%</strong>
+                            <strong id="statsNivelMaximo">--</strong>
                         </div>
 
                         <div>
                             Nível mínimo
-                            <strong>22%</strong>
+                            <strong id="statsNivelMinimo">--</strong>
                         </div>
 
                         <div>
                             Consumo estimado
-                            <strong>280 litros</strong>
+                            <strong id="statsConsumo">--</strong>
                         </div>
                     </div>
                 </article>
@@ -347,7 +356,7 @@
 
             <section class="page-grid">
                 <article class="card">
-                    <h3>ALERTAS DO SISTEMA</h3>
+                    <h3>ALERTAS E HISTÓRICO DO SISTEMA</h3>
 
                     <div id="listaAlertas">
                         <p>Carregando alertas...</p>
@@ -425,25 +434,25 @@
             <section class="report-grid">
                 <article class="card report-card">
                     <span>Nível médio</span>
-                    <strong>58%</strong>
+                    <strong id="reportNivelMedio">--</strong>
                     <p>Média das medições registradas</p>
                 </article>
 
                 <article class="card report-card">
                     <span>Nível máximo</span>
-                    <strong>95%</strong>
+                    <strong id="reportNivelMaximo">--</strong>
                     <p>Maior nível registrado</p>
                 </article>
 
                 <article class="card report-card">
                     <span>Nível mínimo</span>
-                    <strong>22%</strong>
+                    <strong id="reportNivelMinimo">--</strong>
                     <p>Menor nível registrado</p>
                 </article>
 
                 <article class="card report-card">
                     <span>Acionamentos</span>
-                    <strong>12</strong>
+                    <strong id="reportAcionamentos">--</strong>
                     <p>Acionamentos da bomba registrados</p>
                 </article>
             </section>
