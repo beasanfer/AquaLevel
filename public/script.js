@@ -1,32 +1,27 @@
-/* Monitoramento do nível de água - AquaLevel */
+/* AquaLevel: estado da interface, consulta à API e comandos do usuário. */
 
-/* ==================== VARIÁVEIS DE ESTADO ==================== */
+/* ESTADO DA INTERFACE, SINCRONIZADO COM A API */
 
 let modo = "automatico";
-let nivel = 0; // 0 até a primeira leitura do servidor
-let litrosAtual = 0; // valor autoritativo vindo do servidor (dados.litros)
-let bombaLigada = false; // false até a primeira leitura do servidor
+let nivel = 0; // valor inicial até o primeiro polling
+let litrosAtual = 0; // volume informado pelo backend
+let bombaLigada = false; // valor inicial até o primeiro polling
 let minimo = 30;
 let maximo = 90;
 let ultimaMedicaoDataHora = null;
 
-/* Constantes espelhadas de base.ino — manter em sincronia com o firmware.
-   ALTURA_RESERVATORIO_CM: distância sensor→fundo (tanque vazio).
-   GAP_SENSOR_CM: distância mínima sensor↔água (tanque cheio).
-   A altura útil (curso da água do vazio ao cheio) é a diferença.
-   Estes valores DEVEM coincidir com os do base.ino — o firmware é a
-   verdade operacional (é ele que fecha/abre o relé com base nesses
-   números), e o dashboard apenas reflete a mesma conta. */
+/* GEOMETRIA DO RESERVATÓRIO
+ * As distâncias devem acompanhar os valores de base.ino para que
+ * a altura exibida seja coerente com o nível calculado pelo firmware. */
 const ALTURA_RESERVATORIO_CM = 23.6;
 const GAP_SENSOR_CM = 5.0;
 const ALTURA_UTIL_CM = ALTURA_RESERVATORIO_CM - GAP_SENSOR_CM;
 
-/* Capacidade do reservatório — descoberta na primeira leitura válida
-   (litros / (nivel/100)) e cacheada para permanecer exibida mesmo
-   quando o nível cair a 0 momentaneamente. */
+/* A capacidade é inferida por litros / (nível / 100) quando os dados
+ * são positivos. O último valor obtido é preservado ao chegar a zero. */
 let capacidadeLitrosConhecida = null;
 
-/* ==================== ELEMENTOS HTML ==================== */
+/* REFERÊNCIAS A ELEMENTOS DO DOM */
 
 const percentual = document.getElementById("percentual");
 const litros = document.getElementById("litros");
@@ -48,23 +43,23 @@ const listaAlertas = document.getElementById("listaAlertas");
 const alertasDashboard = document.getElementById("alertas");
 const eventosDashboard = document.getElementById("eventos");
 
-/* Capacidade total e altura da água — preenchidos dinamicamente */
+/* Indicadores derivados da medição. */
 const capacidadeEl = document.getElementById("capacidadeLitros");
 const alturaEl = document.getElementById("altura");
 
-/* Elementos da página Configurações */
+/* Valores exibidos na página Configurações. */
 const minimoConfiguracao = document.getElementById("minimoConfiguracao");
 const maximoConfiguracao = document.getElementById("maximoConfiguracao");
 const modoConfiguracao = document.getElementById("modoConfiguracao");
 
-/* Banda de operação (diferença entre máximo e mínimo) */
+/* Banda de histerese exibida nas duas páginas. */
 const bandaValue = document.getElementById("bandaValue");
 const bandaConfiguracao = document.getElementById("bandaConfiguracao");
 
-/* Aviso de falha do sensor */
+/* Banner de falha de sensor. */
 const sensorBanner = document.getElementById("sensorBanner");
 
-/* ==================== ACESSIBILIDADE ==================== */
+/* ACESSIBILIDADE: FONTES E CONTRASTE */
 
 const diminuirFonte = document.getElementById("diminuirFonte");
 const aumentarFonte = document.getElementById("aumentarFonte");
@@ -74,8 +69,8 @@ let tamanhoFonte = Number(localStorage.getItem("aqualevelFonte")) || 100;
 
 let contrasteAtivo = localStorage.getItem("aqualevelContraste") === "true";
 
-/* Aplica tamanho de fonte e alto contraste a partir do estado em memória,
-   sincronizando localStorage, atributos ARIA e classes do body. */
+/* Aplica preferências carregadas de localStorage à página,
+ * incluindo classes e atributo aria-pressed do controle de contraste. */
 function aplicarAcessibilidade() {
   document.documentElement.style.fontSize = tamanhoFonte + "%";
 
@@ -116,14 +111,12 @@ alternarContraste.addEventListener("click", () => {
 
 aplicarAcessibilidade();
 
-/* ==================== NAVEGAÇÃO (SPA) ==================== */
+/* NAVEGAÇÃO SPA: EXIBE UMA PÁGINA POR VEZ */
 
 const navLinks = document.querySelectorAll(".nav-link");
 const pages = document.querySelectorAll(".page");
 
-/* Troca de página: alterna .active-page no <main> alvo e .active no link,
-   e dispara cargas específicas de cada página (histórico, alertas,
-   configurações, dashboard, relatórios). */
+/* Alterna active-page/active e busca dados específicos ao navegar. */
 navLinks.forEach((link) => {
   link.addEventListener("click", () => {
     const pageId = link.dataset.page;
@@ -165,17 +158,15 @@ navLinks.forEach((link) => {
   });
 });
 
-/* ==================== INDICADOR DE CONEXÃO ==================== */
-/* Reflete o estado real da conexão no topo:
- *   - "online"           → servidor ok, ESP32 reportando, sensor ok
- *   - "sensor_falha"     → servidor responde, mas sensorOK=false
- *                          (falha do HC-SR04 ou ESP32 silencioso)
- *   - "servidor_offline" → fetch de /api/status falhou
- */
+/* INDICADOR DO ESTADO DE COMUNICAÇÃO */
+/* INDICADOR DE CONEXÃO
+ * online: a API respondeu e sensorOK não é false.
+ * sensor_falha: a API respondeu, mas sensorOK=false.
+ * servidor_offline: a consulta à API falhou. */
 function atualizarIndicadorConexao(estado) {
   const wifiStatusEl = document.getElementById("wifiStatus");
   if (!wifiStatusEl) return;
-  // <span> é o irmão imediato de #wifiStatus dentro de .connection
+  // O status secundário é o elemento seguinte ao identificador wifiStatus.
   const espStatusEl = wifiStatusEl.nextElementSibling;
 
   if (estado === "online") {
@@ -193,17 +184,15 @@ function atualizarIndicadorConexao(estado) {
   }
 }
 
-/* ==================== ATUALIZAR INTERFACE ==================== */
+/* RENDERIZAÇÃO DO DASHBOARD */
 
 function atualizarDashboard() {
   percentual.textContent = nivel + "%";
   litros.textContent = Math.round(litrosAtual) + " litros";
   agua.style.height = nivel + "%";
 
-  /* Capacidade total do reservatório — derivada de litros/(nivel/100)
-     na primeira leitura válida e cacheada. O servidor só expõe nivel e
-     litros; a relação litros = nivel × CAPACIDADE / 100 permite
-     recuperar a capacidade exata. */
+  /* A cada leitura com volume e percentual positivos, recalcula a
+   * capacidade. Fora dessa condição, conserva o último valor conhecido. */
   if (nivel > 0 && litrosAtual > 0) {
     capacidadeLitrosConhecida = Math.round((litrosAtual * 100) / nivel);
   }
@@ -214,8 +203,7 @@ function atualizarDashboard() {
         : "-- litros";
   }
 
-  /* Altura da coluna de água (cm) — proporcional ao curso útil do sensor
-     (ALTURA_UTIL_CM = ALTURA_RESERVATORIO_CM − GAP_SENSOR_CM). */
+  /* A altura da água é proporcional ao curso útil do sensor, sem GAP. */
   if (alturaEl) {
     alturaEl.textContent = ((nivel / 100) * ALTURA_UTIL_CM).toFixed(1) + " cm";
   }
@@ -223,8 +211,7 @@ function atualizarDashboard() {
   bombaStatus.textContent = bombaLigada ? "Ligada" : "Desligada";
   bombaStatus.style.color = bombaLigada ? "#27a355" : "#ef4040";
 
-  // Última medição vem do timestamp da última leitura válida recebida
-  // pelo backend. Atualização da interface é um relógio separado.
+  // Distingue o horário da última medição do horário do redesenho.
   const ultimaMedicaoData = ultimaMedicaoDataHora
     ? new Date(ultimaMedicaoDataHora)
     : null;
@@ -262,7 +249,7 @@ function atualizarDashboard() {
       modo === "automatico" ? "Automático" : "Manual";
   }
 
-  /* Página Configurações */
+  /* Atualiza também os valores informativos em Configurações. */
 
   if (minimoConfiguracao) {
     minimoConfiguracao.textContent = minimo + "%";
@@ -277,11 +264,8 @@ function atualizarDashboard() {
       modo === "automatico" ? "Automático" : "Manual";
   }
 
-  /* Banda de operação = diferença entre máximo e mínimo.
-     Reflete o comportamento REAL do sistema:
-       - bomba liga quando nível < mínimo
-       - bomba desliga quando nível > máximo
-       - entre mínimo e máximo, a bomba mantém o estado (banda morta) */
+  /* Histerese automática: liga abaixo do mínimo, desliga acima do
+   * máximo e mantém o estado na faixa entre os dois limiares. */
   const banda = Math.max(0, maximo - minimo);
 
   if (bandaValue) {
@@ -292,9 +276,8 @@ function atualizarDashboard() {
     bandaConfiguracao.textContent = Math.round(banda) + "%";
   }
 
-  /* Sliders: só sobrescreve se o usuário NÃO estiver interagindo.
-     Evita que o polling de 5s reverta o valor enquanto o slider está
-     em foco (drag em andamento). */
+  /* Não atualiza sliders focados durante o polling para evitar
+   * sobrescrever valores ainda em edição. */
   if (document.activeElement !== inputMin) {
     inputMin.value = minimo;
     minValue.textContent = minimo;
@@ -309,7 +292,7 @@ function atualizarDashboard() {
   desligarBomba.disabled = modo !== "manual";
 }
 
-/* ==================== FORMATAÇÃO DE ESTATÍSTICAS ==================== */
+/* FORMATAÇÃO DE DADOS E UNIDADES */
 
 function formatarPercentual(valor) {
   return valor !== null && valor !== undefined ? Math.round(valor) + "%" : "--";
@@ -325,7 +308,7 @@ function formatarNumero(valor) {
   return valor !== null && valor !== undefined ? String(valor) : "--";
 }
 
-/* ==================== ESTATÍSTICAS (dashboard + relatórios) ==================== */
+/* ESTATÍSTICAS DO DASHBOARD E DA PÁGINA RELATÓRIOS */
 
 async function buscarEstatisticas() {
   try {
@@ -342,13 +325,13 @@ async function buscarEstatisticas() {
       if (el) el.textContent = valor;
     };
 
-    /* Widgets do dashboard (bloco "HISTÓRICO DO NÍVEL") */
+    /* Preenche os indicadores resumidos do dashboard. */
     set("statsNivelMedio", formatarPercentual(stats.nivelMedio));
     set("statsNivelMaximo", formatarPercentual(stats.nivelMaximo));
     set("statsNivelMinimo", formatarPercentual(stats.nivelMinimo));
     set("statsConsumo", formatarLitros(stats.consumoEstimado));
 
-    /* Página Relatórios */
+    /* Preenche os indicadores da página Relatórios. */
     set("reportNivelMedio", formatarPercentual(stats.nivelMedio));
     set("reportNivelMaximo", formatarPercentual(stats.nivelMaximo));
     set("reportNivelMinimo", formatarPercentual(stats.nivelMinimo));
@@ -358,7 +341,7 @@ async function buscarEstatisticas() {
   }
 }
 
-/* ==================== LIGAR BOMBA ==================== */
+/* COMANDO MANUAL: LIGAR BOMBA */
 
 ligarBomba.addEventListener("click", async () => {
   if (modo !== "manual") {
@@ -398,7 +381,7 @@ ligarBomba.addEventListener("click", async () => {
   }
 });
 
-/* ==================== DESLIGAR BOMBA ==================== */
+/* COMANDO MANUAL: DESLIGAR BOMBA */
 
 desligarBomba.addEventListener("click", async () => {
   if (modo !== "manual") {
@@ -432,7 +415,7 @@ desligarBomba.addEventListener("click", async () => {
   }
 });
 
-/* ==================== MODO AUTOMÁTICO ==================== */
+/* SELEÇÃO DO MODO AUTOMÁTICO */
 
 btnAutomatico.addEventListener("click", async () => {
   try {
@@ -461,7 +444,7 @@ btnAutomatico.addEventListener("click", async () => {
   }
 });
 
-/* ==================== MODO MANUAL ==================== */
+/* SELEÇÃO DO MODO MANUAL */
 
 btnManual.addEventListener("click", async () => {
   try {
@@ -490,7 +473,7 @@ btnManual.addEventListener("click", async () => {
   }
 });
 
-/* ==================== MOSTRAR LIMITES (sliders) ==================== */
+/* ATUALIZAÇÃO VISUAL DOS SLIDERS */
 
 inputMin.addEventListener("input", () => {
   minValue.textContent = inputMin.value;
@@ -500,39 +483,12 @@ inputMax.addEventListener("input", () => {
   maxValue.textContent = inputMax.value;
 });
 
-/* ==================== BLUR ROBUSTO DOS SLIDERS ====================
- * Objetivo: eliminar a janela em que o slider arrastado diverge do
- * valor autoritativo (minimo/maximo) por até 5s, SEM quebrar o fluxo
- * de "Salvar limites".
- *
- * Desafio: `blur` do slider dispara ANTES do `click` do botão Salvar.
- * Se resetarmos incondicionalmente no blur, o click leria o valor
- * recém-resetado (antigo) e o usuário perderia a mudança.
- *
- * Estratégia em quatro camadas:
- *
- * 1. Flag `salvarLimitesPendente`: setada no `mousedown` ou no
- *    `keydown` Enter/Espaço do botão Salvar. Como mousedown/keydown
- *    disparam ANTES do blur, o flag já está true quando o blur roda.
- *
- * 2. Checagem de `e.relatedTarget` no blur: se o foco está indo para
- *    o próprio botão Salvar (ex.: navegação por Tab + Enter), pula o
- *    reset. Cobre o caminho de teclado puro.
- *
- * 3. Blur forçado via listener de mousedown no documento: cobre o
- *    caso de clique em área não-focável (ex.: espaço vazio do card).
- *    Sem isso, o slider mantém o foco (o polling pula a sincronização
- *    porque activeElement === slider) e o valor arrastado persiste
- *    indefinidamente.
- *
- * 4. Reset da flag no `mouseup` global: cobre o cenário em que o
- *    usuário dá mousedown no botão Salvar, arrasta o mouse para fora
- *    antes de soltar (sem gerar click). Sem este reset, a flag
- *    permaneceria true indefinidamente, e o próximo blur de slider
- *    pularia o reset indevidamente. O mouseup precede o click no
- *    fluxo normal, então a flag está false no click handler — mas o
- *    click handler não depende da flag, só lê input.value.
- * ================================================================ */
+/* TRATAMENTO DE FOCO DOS SLIDERS
+ * Ao perder o foco, o slider retorna ao valor confirmado, exceto
+ * quando o usuário está iniciando um clique em Salvar. A flag é
+ * marcada no mousedown/keydown; relatedTarget reconhece o botão.
+ * Clicar fora força o blur e mouseup limpa a flag mesmo se um clique
+ * for cancelado. O click de Salvar lê diretamente os valores atuais. */
 let salvarLimitesPendente = false;
 
 salvarLimites.addEventListener("mousedown", () => {
@@ -545,12 +501,8 @@ salvarLimites.addEventListener("keydown", (e) => {
   }
 });
 
-/* Reset global no mouseup: o fluxo de click é
-   mousedown → blur (skip via flag) → mouseup → click.
-   Limpar aqui garante que, se o usuário abortou o clique (drag-out),
-   a flag não fique presa — o próximo blur voltará a resetar. Se o
-   usuário completou o clique, o handler de click já terá rodado
-   (lendo input.value antes de qualquer efeito desta limpeza). */
+/* O mouseup vem antes do click; limpar a flag evita que uma
+ * tentativa de clique cancelada bloqueie restaurações futuras. */
 document.addEventListener("mouseup", () => {
   salvarLimitesPendente = false;
 });
@@ -570,15 +522,8 @@ inputMax.addEventListener("blur", (e) => {
   resetarSliderSeAplicavel(inputMax, maximo, maxValue, e);
 });
 
-/* Força o blur dos sliders quando o usuário clica fora deles e fora
-   do botão Salvar. Sem isso, cliques em áreas não-focáveis não
-   disparam blur nativo, e o slider ficaria "preso" com o valor
-   arrastado (o polling não sincroniza enquanto o slider tem foco).
-
-   Usa `salvarLimites.contains(e.target)` em vez de `===` para cobrir
-   o caso em que o botão Salvar venha a ter elementos filhos (ícone,
-   <span> etc.) — nesse cenário, `e.target` seria o filho, não o
-   botão, e a comparação direta deixaria de funcionar. */
+/* Força a perda de foco ao clicar fora dos sliders e do botão
+ * Salvar. contains() também considera cliques em filhos desse botão. */
 document.addEventListener("mousedown", (e) => {
   if (e.target === inputMin || e.target === inputMax) return;
   if (salvarLimites.contains(e.target)) return;
@@ -586,15 +531,13 @@ document.addEventListener("mousedown", (e) => {
   if (document.activeElement === inputMax) inputMax.blur();
 });
 
-/* ==================== SALVAR LIMITES ==================== */
+/* ENVIO DOS LIMITES AO BACKEND */
 
 salvarLimites.addEventListener("click", async () => {
   const novoMinimo = Number(inputMin.value);
   const novoMaximo = Number(inputMax.value);
 
-  /* Libera o flag para que blurs futuros voltem a resetar normalmente.
-     Feito antes do await para não deixar o flag "vazado" durante a
-     requisição. */
+  /* Restaura o comportamento normal de blur antes da requisição. */
   salvarLimitesPendente = false;
 
   if (novoMinimo >= novoMaximo) {
@@ -626,8 +569,7 @@ salvarLimites.addEventListener("click", async () => {
     minimo = novoMinimo;
     maximo = novoMaximo;
 
-    /* Reflete imediatamente os novos valores (sliders + banda) sem
-       esperar o próximo polling. */
+    /* Reflete os valores salvos sem esperar pelo próximo polling. */
     atualizarDashboard();
 
     alert("Limites atualizados.");
@@ -636,7 +578,7 @@ salvarLimites.addEventListener("click", async () => {
   }
 });
 
-/* ==================== GRÁFICO DE NÍVEL ==================== */
+/* GRÁFICO DO NÍVEL (CHART.JS) */
 
 const ctx = document.getElementById("graficoNivel");
 
@@ -669,7 +611,7 @@ const grafico = new Chart(ctx, {
   },
 });
 
-/* Atualiza o gráfico com as 20 medições mais recentes do histórico */
+/* Consulta e exibe até 20 registros recentes de nível. */
 async function atualizarGrafico() {
   try {
     const resposta = await fetch("/api/historico");
@@ -712,7 +654,7 @@ async function atualizarGrafico() {
   }
 }
 
-/* ==================== BUSCAR DADOS DO SERVIDOR ==================== */
+/* ATUALIZAÇÃO DO ESTADO VIA /api/status */
 
 async function buscarDados() {
   try {
@@ -726,20 +668,19 @@ async function buscarDados() {
 
     nivel = dados.nivel;
     ultimaMedicaoDataHora = dados.ultimaLeituraDataHora || null;
-    /* Litros autoritativos vêm do servidor (calculados no ESP32 com
-       CAPACIDADE_LITROS). Não assumimos mais "nivel * 10". */
+    /* Utiliza o volume calculado pelo firmware e repassado pela API. */
     litrosAtual = Number(dados.litros) || 0;
     bombaLigada = dados.bombaLigada;
     minimo = dados.minimo;
     maximo = dados.maximo;
     modo = dados.modo;
 
-    /* Exibe o banner quando o sensor reportou falha (sensorOK=false) */
+    /* Sensor com falha ou ESP32 sem comunicação: mostra o aviso. */
     if (sensorBanner) {
       sensorBanner.classList.toggle("hidden", dados.sensorOK !== false);
     }
 
-    /* Reflete o estado real no indicador do topo */
+    /* Diferencia falha do sensor de falha na consulta ao servidor. */
     atualizarIndicadorConexao(
       dados.sensorOK === false ? "sensor_falha" : "online",
     );
@@ -747,12 +688,12 @@ async function buscarDados() {
     atualizarDashboard();
   } catch (erro) {
     console.error("Erro de comunicação:", erro);
-    /* Servidor inacessível — também atualiza o indicador do topo */
+    /* Se a consulta falhar, mostra o estado de servidor offline. */
     atualizarIndicadorConexao("servidor_offline");
   }
 }
 
-/* ==================== ATUALIZAÇÃO AUTOMÁTICA ==================== */
+/* POLLING DE STATUS, HISTÓRICOS E ALERTAS A CADA 5 s */
 
 setInterval(() => {
   buscarDados();
@@ -766,7 +707,9 @@ setInterval(() => {
   buscarAlertas();
 }, 5000);
 
-/* ==================== CHAMADAS INICIAIS ==================== */
+/* CARGA INICIAL
+ * Declarações de função podem ser chamadas antes de sua posição no
+ * arquivo devido ao hoisting do JavaScript. */
 /* Disparam a primeira carga de dados; o hoisting de function declarations
    permite referenciar funções definidas mais abaixo. */
 
@@ -775,7 +718,7 @@ atualizarGrafico();
 buscarUltimosEventos();
 buscarEstatisticas();
 
-/* ==================== HISTÓRICO DE MEDIÇÕES ==================== */
+/* HISTÓRICO DE MEDIÇÕES: CONSTRUÇÃO DA TABELA */
 
 async function buscarHistorico() {
   if (!tabelaHistorico) {
@@ -859,14 +802,13 @@ async function buscarHistorico() {
   }
 }
 
-/* ==================== CHAMADA INICIAL DO HISTÓRICO ==================== */
+/* Carrega a tabela de medições ao abrir a aplicação. */
 
 buscarHistorico();
 
-/* ==================== ALERTAS ==================== */
+/* ALERTAS ATIVOS E HISTÓRICO */
 
-/* Renderiza um alerta como HTML. `mostrarData` controla se data/hora
-   aparecem (página Alertas) ou não (widget compacto do dashboard). */
+/* Gera o HTML de um alerta, com data apenas na visualização detalhada. */
 function criarAlertaHTML(alerta, mostrarData = false) {
   const dataHora = new Date(alerta.dataHora);
 
@@ -968,11 +910,11 @@ async function buscarAlertas() {
   }
 }
 
-/* ==================== CHAMADA INICIAL DOS ALERTAS ==================== */
+/* Carrega os alertas na inicialização. */
 
 buscarAlertas();
 
-/* ==================== ÚLTIMOS EVENTOS DA BOMBA ==================== */
+/* ÚLTIMOS ACIONAMENTOS DA BOMBA */
 
 function criarEventoBombaHTML(evento) {
   const dataHora = new Date(evento.dataHora);
@@ -1023,7 +965,7 @@ async function buscarUltimosEventos() {
       return;
     }
 
-    /* Ordena do mais recente para o mais antigo e exibe os 5 últimos */
+    /* Exibe as cinco transições mais recentes em ordem decrescente de data. */
     const eventosOrdenados = historicoBomba
       .slice()
       .sort((a, b) => new Date(b.dataHora) - new Date(a.dataHora));

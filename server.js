@@ -5,7 +5,10 @@ const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-/* ==================== CONFIGURAÇÃO ==================== */
+/* CONFIGURAÇÃO E PERSISTÊNCIA
+ * estado.json armazena estado, medições, acionamentos e alertas.
+ * Sua durabilidade depende do armazenamento do ambiente de execução;
+ * discos efêmeros podem perder esse arquivo após reinicializações. */
 // Arquivo de persistência: guarda o estado do sistema E os históricos
 // (leituras, acionamentos da bomba, alertas). Sobrevive a reinícios do
 // processo dentro do mesmo container/disco. Em PaaS com filesystem
@@ -13,45 +16,39 @@ const PORT = process.env.PORT || 3000;
 // ou wake-up — comportamento aceito neste projeto.
 const ARQUIVO_ESTADO = path.join(__dirname, "estado.json");
 
-// Limites para evitar crescimento infinito dos arrays em memória
-// (e, por consequência, do estado.json)
-const MAX_HISTORICO_MEMORIA = 5000; // ~1h20 de leituras (1/s)
-const HISTORICO_RESPOSTA = 1000; // últimos 1000 servidos à UI
-const MAX_HISTORICO_BOMBA_MEMORIA = 500; // acionamentos são esparsos
+// Limita a quantidade de registros em memória e em estado.json.
+const MAX_HISTORICO_MEMORIA = 5000; // cerca de 83 min com 1 leitura/s
+const HISTORICO_RESPOSTA = 1000; // janela mais recente exibida na UI
+const MAX_HISTORICO_BOMBA_MEMORIA = 500; // transições da bomba
 const MAX_ALERTAS_MEMORIA = 200;
 
-// Watchdog de comunicação com o ESP32
+// Watchdog: considera o ESP32 silencioso após 15 s sem POST.
 const TIMEOUT_ESP32_MS = 15000;
 const INTERVALO_WATCHDOG_MS = 5000;
 
-// Corte de segurança em modo manual (deve coincidir com
-// NIVEL_CORTE_SEGURANCA do firmware)
+// Limite de segurança do backend, igual ao NIVEL_CORTE_SEGURANCA
+// definido no firmware.
 const LIMITE_SEGURANCA_MANUAL = 98;
 
 app.use(express.json());
 
-// Caminho do estático resolvido em relação a __dirname (não ao CWD),
-// permitindo `node server.js` de qualquer diretório.
+// Serve arquivos da pasta public/ independentemente do diretório de execução.
 app.use(express.static(path.join(__dirname, "public")));
 
-// Chart.js servido diretamente de node_modules — evita CDN (funciona
-// offline e acompanha o versionamento via npm). O arquivo esperado é
-// chart.umd.min.js (Chart.js v4+). Confirme com:
-//   ls node_modules/chart.js/dist
+// Expõe a distribuição local do Chart.js sem depender de uma CDN.
+// Requer a dependência instalada em node_modules.
 app.use(
   "/vendor/chartjs",
   express.static(path.join(__dirname, "node_modules", "chart.js", "dist")),
 );
 
-/* ==================== HELPERS ==================== */
-// Mantém o array com no máximo `max` elementos, descartando os mais antigos.
-// Declarado antes de carregarEstado() para deixar explícita a dependência
-// (embora function declarations sejam hoisted, a ordem aqui ajuda a ler).
+/* UTILITÁRIOS */
+// Descarta os registros mais antigos quando o limite é excedido.
 function limitarTamanho(arr, max) {
   if (arr.length > max) arr.splice(0, arr.length - max);
 }
 
-/* ==================== ESTADO ==================== */
+/* ESTADO INICIAL E VARIÁVEIS COMPARTILHADAS */
 const estadoPadraoSistema = {
   nivel: 0,
   litros: 0,
@@ -65,52 +62,28 @@ const estadoPadraoSistema = {
   ultimaLeituraDataHora: null,
 };
 
-// Variáveis globais preenchidas por carregarEstado()
+// Coleções inicializadas vazias e restauradas do arquivo, se existir.
 let sistema = { ...estadoPadraoSistema };
 let historico = [];
 let historicoBomba = [];
-let alertas = []; // histórico imutável de ocorrências
-let alertasAtivos = []; // condições que ainda exigem atenção
+let alertas = []; // histórico de ocorrências registradas
+let alertasAtivos = []; // condições não resolvidas
 let nivelCriticoAtivo = false;
 
-// Timestamp da última leitura recebida do ESP32. Inicializado no boot —
-// se o ESP32 não falar em TIMEOUT_ESP32_MS, consideramos offline.
+// Referência temporal do watchdog, iniciada na subida do servidor.
 let ultimaLeituraRecebida = Date.now();
 
-// Controle da janela de troca de modo:
-// - modoRecemAlterado: true entre /api/modo(manual) e a próxima leitura.
-// - comandoManualDesdeTroca: true se o usuário já deu comando de bomba
-//   nessa janela — nesse caso, o comando do usuário vence o eco do ESP32.
+// Na primeira leitura após entrar em modo manual, o eco do ESP32 só
+// prevalece se o usuário ainda não enviou um comando de bomba.
 let modoRecemAlterado = false;
 let comandoManualDesdeTroca = false;
 
-/* Carrega estado + históricos do disco.
- *
- * Formato novo (após esta versão):
- *   {
- *     "sistema": {...},
- *     "historico": [...],
- *     "historicoBomba": [...],
- *     "alertas": [...],
- *     "alertasAtivos": [...]
- *   }
- *
- * Formato antigo (compatibilidade):
- *   {
- *     "nivel": 45.3, "litros": 453, ...
- *   }
- *   — detectado pela ausência de `sistema`; nesse caso, o objeto
- *   inteiro é tratado como o próprio `sistema` (históricos começam
- *   vazios, pois não existiam antes desta versão).
- *
- * Após o boot, `sistema.bombaLigada` é SEMPRE forçado a `false` (por
- * segurança), mas o histórico preservado guardava a última transição
- * real. Sem uma compensação, o card BOMBA mostraria "Desligada"
- * enquanto o widget "Últimos eventos" mostraria "Bomba ligada" — UI
- * contraditória. Por isso, quando a bomba estava ligada antes do
- * restart, registramos um evento sintético de "desligada" logo após
- * carregar, para refletir o corte implícito do restart.
- */
+/* RESTAURAÇÃO DO ESTADO
+ * Suporta estado.json no formato atual, com a propriedade `sistema`, e
+ * arquivos legados em que o objeto inteiro representa o estado.
+ * A bomba volta a false no estado lógico do servidor. Se estava true
+ * no arquivo, um evento sintético registra esse reset lógico; ele não
+ * confirma a posição física do relé controlado pelo ESP32. */
 function carregarEstado() {
   try {
     if (!fs.existsSync(ARQUIVO_ESTADO)) {
@@ -123,12 +96,8 @@ function carregarEstado() {
     const novoSistema = salvo.sistema !== undefined ? salvo.sistema : salvo;
     sistema = { ...estadoPadraoSistema, ...novoSistema };
 
-    /* Defensivo: garante que maximo nunca exceda o limite de segurança
-       universal (97). Versões antigas do servidor não validavam maximo
-       em /api/limites, então um estado.json legado podia conter 98/99/100.
-       Sem este clamp, o slider (max="97") exibiria 97 enquanto o <h2>
-       mostraria 100 — inconsistência visível. Também ajusta minimo caso
-       a coerção de maximo o torne inválido (minimo >= maximo). */
+    /* Normaliza dados persistidos de versões antigas: máximo até 97% e
+     * mínimo estritamente inferior ao máximo após o ajuste. */
     if (sistema.maximo > LIMITE_SEGURANCA_MANUAL - 1) {
       console.warn(
         `maximo=${sistema.maximo} excede o limite de segurança; ` +
@@ -140,8 +109,7 @@ function carregarEstado() {
       }
     }
 
-    /* Captura o estado ANTES de forçar false, para saber se precisamos
-       registrar o desligamento implícito do restart. */
+    /* Preserva o estado restaurado para decidir sobre o evento sintético. */
     const bombaEstavaLigada = sistema.bombaLigada === true;
     sistema.bombaLigada = false;
 
@@ -163,11 +131,9 @@ function carregarEstado() {
     }
     nivelCriticoAtivo = alertasAtivos.some((a) => a.tipo === "nivel_critico");
 
-    /* Coerência: o card BOMBA mostra "Desligada" após o boot; o
-       histórico precisa refletir isso, senão a UI fica contraditória.
-       O evento é datado no momento do boot (não no crash) porque
-       tecnicamente foi o boot que fechou o relé — o operador verá o
-       desligamento na hora em que o servidor voltou. */
+    /* Registra no histórico o desligamento lógico decorrente da restauração.
+     * O horário corresponde ao boot do backend, não a uma confirmação
+     * de que o relé físico foi desligado nesse instante. */
     if (bombaEstavaLigada) {
       historicoBomba.push({
         estado: "desligada",
@@ -187,23 +153,10 @@ function carregarEstado() {
   }
 }
 
-/* Grava estado + históricos no disco, de forma atômica.
- *
- * Estratégia: writeFileSync num arquivo .tmp + renameSync. O rename é
- * atômico no mesmo filesystem (POSIX e NTFS), então um crash no meio
- * da escrita deixa ou o estado.json antigo íntegro, ou o novo — nunca
- * um arquivo pela metade. O .tmp pode ficar órfão após um crash, mas
- * é sobrescrito na próxima gravação.
- *
- * Serialização sem indentação (`JSON.stringify(dados)`) para reduzir
- * CPU e I/O: com ~5000 entradas de histórico, o arquivo fica em torno
- * de 750 KB (vs ~1.3 MB indentado). Para inspecionar visualmente:
- *   jq . estado.json
- *
- * A escrita é síncrona e bloqueia o event loop por ~10–20 ms a cada
- * chamada. Chamadas são raras: transições de bomba, mudanças de modo
- * ou limites, alertas e o tick periódico de 60 s. Aceitável.
- */
+/* GRAVAÇÃO DO ESTADO
+ * Salva em estado.json.tmp e depois renomeia no mesmo filesystem.
+ * O JSON compacto reduz I/O, mas a escrita síncrona bloqueia o event
+ * loop durante a operação. Um arquivo .tmp pode sobrar após uma falha. */
 function salvarEstadoAgora() {
   try {
     const dados = {
@@ -223,18 +176,12 @@ function salvarEstadoAgora() {
 
 carregarEstado();
 
-/* Grava o estado já normalizado logo após a carga. Garante que:
- *   1. O arquivo esteja no formato novo após o primeiro boot em uma
- *      instalação antiga (migração implícita).
- *   2. O evento sintético de "desligada" (se aplicável) seja persistido
- *      imediatamente — sem isso, dois crashes seguidos antes do próximo
- *      tick de 60 s empilhariam "desligada" duplicados em memória que
- *      nunca chegariam ao disco.
- *   3. O clamp de maximo (se aplicável) fique persistido — evita que o
- *      próximo boot precise re-clampar e logue novamente. */
+/* Persiste imediatamente dados migrados, limites normalizados e
+ * eventuais eventos sintéticos de desligamento. */
 salvarEstadoAgora();
 
-/* ==================== AÇÕES DO SISTEMA ==================== */
+/* ALTERAÇÕES DE ESTADO E ALERTAS */
+// Registra e persiste apenas transições efetivas do estado da bomba.
 function registrarAcionamento(novoEstado) {
   if (sistema.bombaLigada !== novoEstado) {
     sistema.bombaLigada = novoEstado;
@@ -249,8 +196,7 @@ function registrarAcionamento(novoEstado) {
 }
 
 function registrarAlerta(tipo, mensagem, nivel = null, ativo = false) {
-  // Uma condição ativa gera apenas uma ocorrência no histórico até ser
-  // resolvida. Evita registrar uma ocorrência por segundo em falhas contínuas.
+  // Evita duplicar ocorrências enquanto o mesmo alerta está ativo.
   if (ativo && alertasAtivos.some((a) => a.tipo === tipo)) return;
 
   const alerta = {
@@ -262,8 +208,7 @@ function registrarAlerta(tipo, mensagem, nivel = null, ativo = false) {
   alertas.push(alerta);
   limitarTamanho(alertas, MAX_ALERTAS_MEMORIA);
 
-  // Um alerta ativo representa uma condição ainda presente. O histórico
-  // acima nunca é apagado quando a condição é resolvida.
+  // Separa o histórico de ocorrências das condições ainda não resolvidas.
   if (ativo && !alertasAtivos.some((a) => a.tipo === tipo)) {
     alertasAtivos.push({ ...alerta });
     limitarTamanho(alertasAtivos, MAX_ALERTAS_MEMORIA);
@@ -277,15 +222,8 @@ function resolverAlerta(tipo) {
   if (alertasAtivos.length !== tamanhoAnterior) salvarEstadoAgora();
 }
 
-// Emite o alerta "nivel_critico" apenas na transição (entrada) para a
-// faixa crítica, evitando spam a cada leitura.
-//
-// Operador `<` (não `<=`) para alinhar com firmware e cliente:
-//   - firmware NÃO liga a bomba quando nivel === minimo
-//   - cliente NÃO mostra "Nível crítico" quando nivel === minimo
-//   - servidor NÃO deve registrar alerta quando nivel === minimo
-// Sem esse alinhamento, o dashboard mostrava "Nível normal" em verde
-// enquanto o painel ao lado exibia "Nível crítico" — contraditório.
+// O nível só é crítico abaixo do mínimo; ao voltar à faixa normal,
+// o alerta ativo é resolvido. O comparador < coincide com firmware e UI.
 function verificarNivelCritico() {
   if (sistema.nivel < sistema.minimo) {
     if (!nivelCriticoAtivo) {
@@ -303,31 +241,27 @@ function verificarNivelCritico() {
   }
 }
 
-/* =========================================================
- * ESP32 ENVIA LEITURA E RECEBE COMANDO NA MESMA RESPOSTA
- *
- * O ESP32 aplica o comando no próximo POST (~1 s). A UI faz
- * atualização otimista ao clicar, então o usuário percebe a
- * resposta imediatamente; o relé pode levar até 1 s para acionar.
- * ========================================================= */
+/* API DE TELEMETRIA E COMANDOS
+ * Um POST /api/nivel recebe a leitura e devolve o modo, os limites e o
+ * estado de comando. A UI pode antecipar visualmente uma mudança antes
+ * de o ESP32 receber e executar a resposta. */
 app.post("/api/nivel", (req, res) => {
-  // Qualquer POST conta como "ESP32 vivo" para o watchdog
+  // Reinicia o watchdog quando chega um POST à rota de telemetria.
   ultimaLeituraRecebida = Date.now();
 
   const nivelBruto = req.body.nivel;
   const litrosBruto = req.body.litros;
 
-  // Falha do sensor (−1): desliga a bomba também no estado do SERVIDOR
-  // para que, em modo manual, uma recuperação posterior não "ressuscite"
-  // a bomba com base em estado velho.
+  // A convenção nivel=-1 informa falha no sensor; o backend registra
+  // o alerta e desliga o estado lógico da bomba.
   if (nivelBruto !== undefined && Number(nivelBruto) === -1) {
     sistema.sensorOK = false;
     registrarAlerta("sensor_falha", "Falha na leitura do sensor.", null, true);
 
-    // Falha do sensor é motivo de segurança → bomba OFF
+    // Mantém o estado lógico da bomba desligado em caso de falha.
     registrarAcionamento(false);
 
-    // A janela de troca de modo não sobrevive a uma falha
+    // Cancela a sincronização pendente do modo manual.
     modoRecemAlterado = false;
     comandoManualDesdeTroca = false;
 
@@ -345,7 +279,7 @@ app.post("/api/nivel", (req, res) => {
   const nivel = Number(nivelBruto);
   const litros = Number(litrosBruto);
 
-  // Payload realmente malformado → 400
+  // Valida presença, finitude e faixa de nível e volume; rejeita com 400.
   if (
     nivelBruto === undefined ||
     nivelBruto === null ||
@@ -387,11 +321,8 @@ app.post("/api/nivel", (req, res) => {
   sistema.nivel = nivel;
   sistema.litros = litros;
 
-  // Campos derivados — FONTE DA VERDADE é o firmware. Aceitos como
-  // OPCIONAIS para compatibilidade com versões antigas do base.ino que
-  // ainda não os enviam. Quando ausentes ou inválidos, o servidor
-  // mantém o valor anterior (0 no primeiro boot, ou último válido).
-  // A UI exibe "--" enquanto forem 0.
+  // Altura e capacidade são campos opcionais: se ausentes, mantém os
+  // valores anteriores. O firmware deste relatório não os envia no POST.
   const alturaBruta = Number(req.body.alturaCm);
   if (Number.isFinite(alturaBruta) && alturaBruta >= 0) {
     sistema.alturaCm = alturaBruta;
@@ -401,11 +332,9 @@ app.post("/api/nivel", (req, res) => {
     sistema.capacidadeLitros = capacidadeBruta;
   }
 
-  // Corte de segurança no modo manual: além de desligar, fecha a janela
-  // de modo e marca "comando manual já aplicado" para que o eco do ESP32
-  // — que ainda pode reportar bombaLigada=true neste POST, pois o corte
-  // local no firmware só ocorre APÓS esta requisição — não reative a
-  // bomba no servidor. Sem isso, o corte era desfeito pelo eco.
+  // Desliga o estado lógico da bomba em modo manual ao alcançar 98%.
+  // Fecha a janela de sincronização para ignorar o eco possivelmente
+  // desatualizado; o firmware também aplica o corte local.
   if (
     sistema.modo === "manual" &&
     sistema.bombaLigada &&
@@ -421,11 +350,9 @@ app.post("/api/nivel", (req, res) => {
     comandoManualDesdeTroca = true;
   }
 
-  // Regras de quem é a fonte da verdade para o estado da bomba:
-  // - AUTOMÁTICO: ESP32 é a fonte — aceita eco sempre.
-  // - MANUAL, primeira leitura após troca e SEM comando do usuário:
-  //   aceita o eco do ESP32 (estado físico atual).
-  // - MANUAL, demais casos: usuário é a fonte — ignora eco.
+  // Origem do estado da bomba: no automático, o ESP32 prevalece.
+  // No manual, o eco é aceito apenas na primeira leitura após a troca
+  // de modo, desde que não exista comando do usuário mais recente.
   if (typeof req.body.bombaLigada === "boolean") {
     if (sistema.modo === "automatico") {
       registrarAcionamento(req.body.bombaLigada);
@@ -434,13 +361,12 @@ app.post("/api/nivel", (req, res) => {
     }
   }
 
-  // A janela de troca de modo dura exatamente uma leitura
+  // Consome a janela de sincronização após esta leitura.
   modoRecemAlterado = false;
   comandoManualDesdeTroca = false;
 
-  // Registra leitura no histórico (limita tamanho, inclui bomba e modo).
-  // NÃO salva em disco a cada leitura — 1 POST/s × ~750 KB seria I/O
-  // excessivo. A gravação fica a cargo do tick periódico de 60 s.
+  // Guarda cada medição em memória. A gravação em disco acontece
+  // periodicamente ou quando há outras mudanças persistidas.
   historico.push({
     nivel: sistema.nivel,
     litros: sistema.litros,
@@ -452,7 +378,7 @@ app.post("/api/nivel", (req, res) => {
 
   verificarNivelCritico();
 
-  // PIGGYBACK: devolve o comando junto com o ACK da leitura
+  // Retorna os comandos na resposta ao próprio POST de telemetria.
   res.json({
     sucesso: true,
     modo: sistema.modo,
@@ -462,8 +388,8 @@ app.post("/api/nivel", (req, res) => {
   });
 });
 
-/* ==================== CONSULTA E COMANDO ==================== */
-// Rota de comando isolada — mantida apenas para debug (curl)
+/* API DE CONSULTA E COMANDOS */
+// Consulta de comando sem alterações de estado.
 app.get("/api/comando", (req, res) => {
   res.json({
     bombaLigada: sistema.bombaLigada,
@@ -477,7 +403,7 @@ app.get("/api/status", (req, res) => {
   res.json(sistema);
 });
 
-// Nunca devolver o array inteiro — apenas a janela servida à UI
+// Expõe apenas as últimas HISTORICO_RESPOSTA medições.
 app.get("/api/historico", (req, res) => {
   res.json(historico.slice(-HISTORICO_RESPOSTA));
 });
@@ -487,14 +413,16 @@ app.get("/api/historico-bomba", (req, res) => {
 });
 
 app.get("/api/alertas", (req, res) => {
-  res.json(alertas); // histórico completo de ocorrências
+  res.json(alertas); // ocorrências retidas em memória
 });
 
 app.get("/api/alertas/ativos", (req, res) => {
-  res.json(alertasAtivos); // condições ainda não resolvidas
+  res.json(alertasAtivos); // condições não resolvidas
 });
 
-/* ==================== ESTATÍSTICAS AGREGADAS ==================== */
+/* ESTATÍSTICAS DO HISTÓRICO RETIDO EM MEMÓRIA
+ * Campos numéricos nulos indicam ausência de amostras válidas.
+ * O consumo é uma estimativa obtida somando quedas de volume. */
 // Calculadas sob demanda sobre o histórico em memória (até 5000 amostras
 // ≈ 1h20). Quando não há amostras, os campos numéricos vêm como null para
 // que a UI exiba "--" em vez de 0 (0% seria um valor falso).
@@ -524,9 +452,8 @@ app.get("/api/estatisticas", (req, res) => {
   const nivelMax = Math.max(...niveis);
   const nivelMin = Math.min(...niveis);
 
-  // O consumo é calculado apenas entre amostras válidas consecutivas
-  // dentro da sequência filtrada, sem deixar registros inválidos
-  // contaminarem a soma.
+  // Soma reduções de litros entre pares consecutivos da sequência
+  // filtrada de leituras válidas; aumentos não entram no consumo.
   let consumo = 0;
   for (let i = 1; i < amostrasValidas.length; i++) {
     const prev = Number(amostrasValidas[i - 1].litros);
@@ -561,12 +488,8 @@ app.post("/api/bomba", (req, res) => {
     });
   }
 
-  // Nunca aceita ligar acima do limite de segurança universal. Antes,
-  // a rota só checava sistema.maximo — se maximo=100 fosse configurado,
-  // ligar em nível ≥ 98 era aceito e, na leitura seguinte, o firmware
-  // derrubava o relé. Entre o clique e a próxima leitura, /api/status
-  // reportava bombaLigada=true com o relé ainda aberto (janela ~1 s).
-  // Bloqueando o comando na origem, essa janela desaparece.
+  // Bloqueia o comando manual de ligar quando o nível atingiu o
+  // limite de segurança, independentemente do máximo configurado.
   if (req.body.ligar && sistema.nivel >= LIMITE_SEGURANCA_MANUAL) {
     return res.status(400).json({
       erro: `Bomba não pode ser ligada. Limite de segurança atingido (≥ ${LIMITE_SEGURANCA_MANUAL}%).`,
@@ -581,7 +504,7 @@ app.post("/api/bomba", (req, res) => {
 
   registrarAcionamento(req.body.ligar);
 
-  // A partir daqui, o comando do usuário vence o eco do ESP32
+  // Prioriza o comando do usuário sobre o eco de sincronização.
   comandoManualDesdeTroca = true;
 
   res.json(sistema);
@@ -599,7 +522,7 @@ app.post("/api/modo", (req, res) => {
   sistema.modo = modo;
   salvarEstadoAgora();
 
-  // Abre a janela para a primeira leitura após a troca
+  // Abre uma janela de uma leitura ao entrar no modo manual.
   if (modo === "manual") {
     modoRecemAlterado = true;
     comandoManualDesdeTroca = false;
@@ -615,9 +538,7 @@ app.post("/api/limites", (req, res) => {
   const minimo = Number(req.body.minimo);
   const maximo = Number(req.body.maximo);
 
-  // Validação básica: números finitos e ordenados. Sem isso, um payload
-  // como {"minimo": "abc", "maximo": "xyz"} passaria por engano (NaN >= NaN
-  // é false).
+  // Exige números finitos, mínimo não negativo e mínimo < máximo.
   if (
     !Number.isFinite(minimo) ||
     !Number.isFinite(maximo) ||
@@ -629,11 +550,8 @@ app.post("/api/limites", (req, res) => {
     });
   }
 
-  // Trava de coerência com o firmware: o ESP32 corta a bomba em
-  // NIVEL_CORTE_SEGURANCA (98%). Aceitar maximo ≥ 98 permitiria ao
-  // usuário configurar uma faixa em que o corte de segurança dispararia
-  // sempre antes do "máximo", gerando comportamento confuso. Bloqueamos
-  // na origem.
+  // O máximo configurável é 97%, preservando uma margem até o corte
+  // local em 98% definido no firmware.
   if (maximo > LIMITE_SEGURANCA_MANUAL - 1) {
     return res.status(400).json({
       erro: `Nível máximo não pode exceder ${LIMITE_SEGURANCA_MANUAL - 1}% (limite de segurança do firmware é ${LIMITE_SEGURANCA_MANUAL}%).`,
@@ -649,13 +567,13 @@ app.post("/api/limites", (req, res) => {
   res.json(sistema);
 });
 
-/* ==================== WATCHDOG E PERSISTÊNCIA ==================== */
-// Se ficarmos TIMEOUT_ESP32_MS sem nenhum POST de leitura, marca
-// sensorOK=false para que o banner do dashboard alerte o usuário.
+/* WATCHDOG DE COMUNICAÇÃO E SALVAMENTO PROGRAMADO */
+// Sem POST durante TIMEOUT_ESP32_MS, sinaliza sensor indisponível
+// e registra alerta de ESP32 offline.
 setInterval(() => {
   const silencioMs = Date.now() - ultimaLeituraRecebida;
   if (silencioMs <= TIMEOUT_ESP32_MS) return;
-  if (sistema.sensorOK === false) return; // já marcado, não spammar
+  if (sistema.sensorOK === false) return; // já sinalizado, evita registros repetidos
 
   console.log(
     `ESP32 silencioso por ${Math.round(silencioMs / 1000)}s — marcando offline.`,
@@ -670,17 +588,14 @@ setInterval(() => {
     true,
   );
 
-  // Não mantenha o estado lógico da bomba ligado quando o ESP32 some
-  // durante operação manual. O firmware também desliga localmente no
-  // primeiro POST que falhar; este corte sincroniza o estado do servidor.
+  // Em modo manual, também registra a bomba como desligada no backend.
+  // Sem comunicação, não há confirmação imediata do relé físico.
   if (sistema.modo === "manual" && sistema.bombaLigada) {
     registrarAcionamento(false);
   }
 }, INTERVALO_WATCHDOG_MS);
 
-// Persistência periódica (60 s) e em shutdown. O tick cobre o caso de
-// o processo rodar por muito tempo sem transições de bomba/alertas —
-// nesse cenário, o histórico de leituras só seria salvo neste tick.
+// Salva as leituras acumuladas a cada 60 s e durante o encerramento.
 setInterval(salvarEstadoAgora, 60000);
 
 process.on("SIGINT", () => {

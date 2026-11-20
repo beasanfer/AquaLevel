@@ -5,30 +5,25 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>AquaLevel</title>
 
-        <!-- Estilos globais da aplicação -->
+        <!-- Folha de estilos da interface. -->
         <link rel="stylesheet" href="style.css" />
 
-        <!-- Chart.js servido de node_modules via /vendor/chartjs
-             (rota estática definida em server.js). Sem CDN, funciona
-             offline. O arquivo vem do pacote npm `chart.js` (v4+). -->
+        <!-- Chart.js é entregue por /vendor/chartjs, rota estática do backend.
+             Não é necessário carregar a biblioteca por CDN. -->
         <script src="/vendor/chartjs/chart.umd.min.js"></script>
     </head>
 
     <body>
-        <!--
-            Layout do tipo SPA: todas as páginas (<main class="page">)
-            coexistem no DOM e a troca é feita por script.js alternando a
-            classe .active-page. Os links do menu usam data-page para
-            identificar a página-alvo.
-        -->
+        <!-- Navegação SPA: todas as páginas main.page permanecem no DOM.
+             script.js alterna a classe active-page usando o atributo data-page. -->
 
-        <!-- ==================== NAVBAR ==================== -->
+        <!-- BARRA SUPERIOR: navegação, acessibilidade e conexão -->
         <nav class="topbar">
             <div class="brand">
                 <h2>AquaLevel</h2>
             </div>
 
-            <!-- Navegação entre páginas (SPA) — alvo em data-page -->
+            <!-- data-page aponta para o id da página correspondente. -->
             <div class="menu">
                 <a class="nav-link active" data-page="dashboard">
                     <img src="./icons/dashboard.png" alt="" />
@@ -61,7 +56,7 @@
                 </a>
             </div>
 
-            <!-- Controles de acessibilidade: fonte (A−/A+) e alto contraste -->
+            <!-- Controles de fonte e alto contraste persistidos por script.js. -->
             <div class="accessibility" aria-label="Controles de acessibilidade">
                 <button
                     id="diminuirFonte"
@@ -95,14 +90,14 @@
                 </button>
             </div>
 
-            <!-- Status de conexão (Wi-Fi / ESP32) -->
+            <!-- Indicador atualizado conforme o estado retornado pela API. -->
             <div class="connection">
                 <strong id="wifiStatus">● Conectado</strong>
                 <span>ESP32 • Online</span>
             </div>
         </nav>
 
-        <!-- ==================== DASHBOARD ==================== -->
+        <!-- DASHBOARD: monitoramento e comandos -->
         <main id="dashboard" class="page active-page">
             <header>
                 <div>
@@ -116,16 +111,14 @@
                 </div>
             </header>
 
-            <!-- Aviso de sensor com falha (exibido quando sensorOK = false) -->
+            <!-- Exibido quando /api/status informa sensorOK=false. -->
             <div id="sensorBanner" class="sensor-banner hidden" role="alert">
                 ⚠ Sensor de nível com falha — exibindo a última leitura válida.
             </div>
 
-            <!-- Cards principais: nível, bomba, modo de operação e controle rápido -->
+            <!-- Visão rápida do nível, bomba, modo e controles. -->
             <section class="grid-top">
-                <!-- Nível do reservatório: gauge com percentual/litros
-                     e representação visual do tanque (água sobe conforme
-                     o nível via script.js). -->
+                <!-- Nível, volume e ilustração do tanque atualizados via script.js. -->
                 <article class="card nivel-card">
                     <h3>NÍVEL DO RESERVATÓRIO</h3>
 
@@ -159,7 +152,7 @@
                     </div>
                 </article>
 
-                <!-- Estado atual da bomba -->
+                <!-- Estado lógico da bomba informado pelo backend. -->
                 <article class="card bomba-card">
                     <h3>BOMBA</h3>
 
@@ -175,7 +168,7 @@
                     </div>
                 </article>
 
-                <!-- Seleção entre modo automático e manual -->
+                <!-- Alterna entre operação automática e manual via API. -->
                 <article class="card modo-card">
                     <h3>MODO DE OPERAÇÃO</h3>
 
@@ -188,7 +181,7 @@
                     <p>A bomba opera com base nos limites configurados.</p>
                 </article>
 
-                <!-- Liga/desliga manual — habilitado apenas em modo manual -->
+                <!-- Disponível apenas quando o modo manual está ativo. -->
                 <article class="card controle-card">
                     <h3>CONTROLE RÁPIDO</h3>
 
@@ -204,7 +197,7 @@
                 </article>
             </section>
 
-            <!-- Limites configuráveis e alertas ativos -->
+            <!-- Limites de acionamento e alertas ativos. -->
             <section class="grid-middle">
                 <article class="card">
                     <h3>LIMITES CONFIGURADOS</h3>
@@ -224,7 +217,7 @@
                             />
                         </div>
 
-                        <!-- Banda de operação = máximo − mínimo (histerese) -->
+                        <!-- Banda de histerese: máximo - mínimo. -->
                         <div>
                             <label>Banda de operação</label>
                             <h2><span id="bandaValue">60</span>%</h2>
@@ -234,13 +227,7 @@
                             <label>Nível máximo</label>
                             <h2><span id="maxValue">90</span>%</h2>
 
-                            <!-- max="97" reflete a trava de coerência com
-                                 o firmware (NIVEL_CORTE_SEGURANCA = 98%):
-                                 o servidor rejeita maximo > 97, então o
-                                 slider nunca deve permitir arrastar até
-                                 98/99/100. Se um estado.json legado tinha
-                                 maximo = 100, o clamp em carregarEstado()
-                                 normaliza para 97 no boot. -->
+                            <!-- O máximo permitido é 97%; o corte de segurança acontece em 98%. -->
                             <input
                                 id="maximo"
                                 type="range"
@@ -266,12 +253,12 @@
                 </article>
             </section>
 
-            <!-- Histórico resumido (gráfico + estatísticas) e últimos eventos -->
+            <!-- Gráfico de medições, estatísticas e eventos recentes. -->
             <section class="grid-bottom">
                 <article class="card">
                     <h3>HISTÓRICO DO NÍVEL</h3>
 
-                    <!-- Gráfico Chart.js renderizado por script.js -->
+                    <!-- Exibe as 20 medições mais recentes retornadas pelo histórico. -->
                     <canvas id="graficoNivel"></canvas>
 
                     <div class="statistics">
@@ -307,7 +294,7 @@
             </section>
         </main>
 
-        <!-- ==================== HISTÓRICO ==================== -->
+        <!-- HISTÓRICO DE MEDIÇÕES -->
         <main id="historico" class="page">
             <header>
                 <div>
@@ -320,7 +307,7 @@
                 <article class="card">
                     <h3>HISTÓRICO DE MEDIÇÕES</h3>
 
-                    <!-- Tabela preenchida dinamicamente por script.js -->
+                    <!-- Tabela preenchida por buscarHistorico(), em script.js. -->
                     <div class="table-container">
                         <table>
                             <thead>
@@ -345,7 +332,7 @@
             </section>
         </main>
 
-        <!-- ==================== ALERTAS ==================== -->
+        <!-- ALERTAS ATIVOS E HISTÓRICO DE OCORRÊNCIAS -->
         <main id="alertas-page" class="page">
             <header>
                 <div>
@@ -365,7 +352,7 @@
             </section>
         </main>
 
-        <!-- ==================== CONFIGURAÇÕES ==================== -->
+        <!-- CONFIGURAÇÕES: leitura dos parâmetros em uso -->
         <main id="configuracoes" class="page">
             <header>
                 <div>
@@ -375,7 +362,7 @@
             </header>
 
             <section class="config-grid">
-                <!-- Limites e banda de operação (somente leitura nesta tela) -->
+                <!-- Limites e banda exibidos sem edição nesta página. -->
                 <article class="card">
                     <h3>LIMITES DO RESERVATÓRIO</h3>
 
@@ -422,7 +409,7 @@
             </section>
         </main>
 
-        <!-- ==================== RELATÓRIOS ==================== -->
+        <!-- RELATÓRIOS: estatísticas calculadas pelo backend -->
         <main id="relatorios" class="page">
             <header>
                 <div>
@@ -458,7 +445,7 @@
             </section>
         </main>
 
-        <!-- ==================== SOBRE ==================== -->
+        <!-- SOBRE O PROJETO -->
         <main id="sobre" class="page">
             <header>
                 <div>
@@ -482,7 +469,7 @@
                         o nível de água em reservatórios.
                     </p>
 
-                    <!-- Stack e funcionalidades principais -->
+                    <!-- Tecnologias e capacidades principais da solução. -->
                     <div class="sobre-info">
                         <div>
                             <strong>ESP32</strong>
