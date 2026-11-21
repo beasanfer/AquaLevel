@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <esp_system.h> // esp_random(): identificador novo a cada inicializacao
 
 /* PINOS: HC-SR04, relé da bomba e LEDs indicadores. */
 #define PINO_TRIG       13
@@ -39,8 +40,7 @@ float NIVEL_LED_VERDE    = 90.0f;
 
 /* CORTE DE SEGURANÇA: aplica-se a ambos os modos, mesmo sem rede.
  * Deve coincidir com LIMITE_SEGURANCA_MANUAL em server.js.
- * O limite é verificado antes e depois do POST para impedir que um
- * comando manual recebido reative a bomba acima do nível permitido. */
+ * Acionamentos manuais também respeitam nivelMaximo. */
 const float NIVEL_CORTE_SEGURANCA = 98.0f;
 
 const int NUMERO_AMOSTRAS = 7;
@@ -50,6 +50,16 @@ const unsigned long INTERVALO_LEITURA_MS = 1000UL;
 bool STATUS_BOMBA = false;
 String modoAtual = "automatico";
 unsigned long TEMPO_ULTIMA_LEITURA = 0;
+float ultimoNivelValido = -1.0f;
+// Um ID aplicado não pode executar de novo depois de uma queda da rede.
+String ultimoComandoAplicadoId = "";
+// Depois de falha no modo manual, exige comando NOVO do usuário.
+bool bloqueioManual = false;
+// Identifica um boot específico; o backend rejeita comandos de outro boot.
+String sessaoESP32 = "";
+// Após falha do sensor, não retoma o automático sem verificar o modo atual.
+// Mesmo que a API responda durante a falha, confirma novamente na recuperação.
+bool aguardandoSincronizacaoAposFalha = false;
 
 enum EstadoNivel { BAIXO = 0, MEDIO = 1, CHEIO = 2 };
 
@@ -84,10 +94,7 @@ void garantirWiFi() {
 }
 
 /* MEDIÇÃO ULTRASSÔNICA */
-// Tempo máximo de espera por um eco: 30 ms.
-unsigned long timeoutPulseIn() { return 30000UL; }
-
-// Dispara o TRIG e converte o tempo do ECHO em distância; -1 indica timeout.
+// Um eco ausente após 30 ms é considerado falha de leitura.
 float lerDistanciaCrua() {
   digitalWrite(PINO_TRIG, LOW);
   delayMicroseconds(2);
@@ -95,7 +102,7 @@ float lerDistanciaCrua() {
   delayMicroseconds(10);
   digitalWrite(PINO_TRIG, LOW);
 
-  unsigned long duracao = pulseIn(PINO_ECHO, HIGH, timeoutPulseIn());
+  unsigned long duracao = pulseIn(PINO_ECHO, HIGH, 30000UL);
   if (duracao == 0) return -1.0;
   return (duracao * 0.0343) / 2.0;
 }
@@ -130,9 +137,16 @@ float distanciaParaNivel(float distancia) {
   return nivel;
 }
 
-/* ATUADORES: RELÉ E LEDs */
-// Atualiza o estado lógico, o relé e o LED de funcionamento da bomba.
+/* ATUADORES: relé sempre passa pela verificação local de segurança. */
+bool atingiuLimite(float nivel) {
+  return nivel >= nivelMaximo || nivel >= NIVEL_CORTE_SEGURANCA;
+}
+
 void acionarBomba(bool ligar) {
+  if (ligar && (ultimoNivelValido < 0.0f || atingiuLimite(ultimoNivelValido))) {
+    Serial.println("Acionamento impedido pelos limites ou falta de leitura.");
+    ligar = false;
+  }
   STATUS_BOMBA = ligar;
   digitalWrite(PINO_RELE, ligar == RELE_ATIVO_EM_LOW ? LOW : HIGH);
   digitalWrite(LED_BOMBA, ligar ? HIGH : LOW);
@@ -154,10 +168,8 @@ void atualizarLedsNivel(float nivel) {
     digitalWrite(LEDS_NIVEL[i], i == estado ? HIGH : LOW);
 }
 
-/* COMUNICAÇÃO BIDIRECIONAL COM A API
- * Um POST envia nível, volume e estado da bomba. A resposta devolve
- * modo, limites e comando manual. Retorna true apenas com HTTP 200
- * e JSON válido. ArduinoJson evita montar JSON por concatenações. */
+/* Telemetria via POST; a resposta sincroniza modo, limites e comandos.
+ * Retorna true somente para HTTP 200 com configuração válida. */
 bool enviarDadosParaServidor(float nivel, float litros) {
   if (WiFi.status() != WL_CONNECTED) return false;
 
@@ -173,9 +185,15 @@ bool enviarDadosParaServidor(float nivel, float litros) {
 
   // Payload serializado com ArduinoJson 7.x; em 6.x, usar documento estático.
   JsonDocument payloadDoc;
-  payloadDoc["nivel"]      = nivel;
-  payloadDoc["litros"]     = litros;
-  payloadDoc["bombaLigada"] = STATUS_BOMBA;
+  payloadDoc["nivel"] = nivel;
+  payloadDoc["litros"] = litros;
+  payloadDoc["bombaLigada"] = STATUS_BOMBA; // estado atual do GPIO
+  // Reporta o modo efetivamente executado, não o modo desejado no servidor.
+  // Durante uma troca de modo, esta leitura ainda pertence ao modo anterior.
+  payloadDoc["modoESP32"] = modoAtual;
+  payloadDoc["sessaoESP32"] = sessaoESP32;
+  payloadDoc["comandoAplicadoId"] = ultimoComandoAplicadoId;
+  payloadDoc["bloqueioManual"] = bloqueioManual;
 
   String payload;
   serializeJson(payloadDoc, payload);
@@ -189,25 +207,55 @@ bool enviarDadosParaServidor(float nivel, float litros) {
     JsonDocument doc;  // ArduinoJson 7.x; em 6.x use StaticJsonDocument<256>
     DeserializationError err = deserializeJson(doc, resposta);
 
-    if (!err) {
-      modoAtual   = doc["modo"]   | modoAtual;
-      nivelMinimo = doc["minimo"] | nivelMinimo;
-      nivelMaximo = doc["maximo"] | nivelMaximo;
+    // O backend usa sucesso=false para falha de leitura, MAS devolve modo
+    // e limites válidos. Essas configurações devem ser aplicadas também
+    // enquanto o sensor falha, sem permitir acionamento do relé.
+    const bool respostaDeFalha = !err && nivel < 0.0f &&
+      doc["sensorOK"].is<bool>() && doc["sensorOK"].as<bool>() == false;
+    if (!err && (doc["sucesso"].as<bool>() == true || respostaDeFalha)) {
+      String novoModo = doc["modo"] | modoAtual;
+      float novoMin = doc["minimo"] | nivelMinimo;
+      float novoMax = doc["maximo"] | nivelMaximo;
+      if ((novoModo == "manual" || novoModo == "automatico") &&
+          novoMin >= 1.0f && novoMin < novoMax &&
+          novoMax <= NIVEL_CORTE_SEGURANCA - 1.0f) {
+        // Entrar em modo manual não herda uma bomba ligada pelo automático.
+        if (modoAtual != "manual" && novoModo == "manual") {
+          acionarBomba(false);
+        }
+        modoAtual = novoModo;
+        nivelMinimo = novoMin;
+        nivelMaximo = novoMax;
+        NIVEL_LED_VERMELHO = nivelMinimo;
+        NIVEL_LED_VERDE = nivelMaximo;
 
-      // Faixas de LED: vermelho abaixo do mínimo, amarelo até antes do
-      // máximo e verde a partir do máximo.
-      NIVEL_LED_VERMELHO = nivelMinimo;
-      NIVEL_LED_VERDE    = nivelMaximo;
+        // Se o servidor mudou o máximo durante o POST, corta imediatamente.
+        if (STATUS_BOMBA && atingiuLimite(nivel)) {
+          acionarBomba(false);
+        }
 
-      // Executa o comando remoto diretamente apenas no modo manual.
-      bool bombaCmd = doc["bombaLigada"] | STATUS_BOMBA;
-      if (modoAtual == "manual" && bombaCmd != STATUS_BOMBA) {
-        Serial.printf("Comando manual: bomba %s\n",
-                      bombaCmd ? "LIGAR" : "DESLIGAR");
-        acionarBomba(bombaCmd);
+        // 'bombaLigada' na resposta é apenas telemetria confirmada, nunca
+        // uma instrução. Só um comandoManual com ID novo pode acionar.
+        JsonVariantConst cmd = doc["comandoManual"];
+        if (nivel >= 0.0f && modoAtual == "manual" && !cmd.isNull() &&
+            cmd["id"].is<const char*>() && cmd["ligar"].is<bool>()) {
+          String id = cmd["id"].as<String>();
+          if (id.length() > 0 && id != ultimoComandoAplicadoId) {
+            bool ligar = cmd["ligar"].as<bool>();
+            acionarBomba(ligar); // bloqueio de maximo/98% tambem aqui
+            // Confirma processamento uma vez; se o corte recusou ligar,
+            // o backend verá bombaLigada=false ao receber este mesmo ID.
+            ultimoComandoAplicadoId = id;
+            if (STATUS_BOMBA == ligar) bloqueioManual = false;
+            Serial.printf("Comando manual %s: bomba %s\n",
+                          id.c_str(), STATUS_BOMBA ? "LIGADA" : "DESLIGADA");
+          }
+        }
+        ok = true;
+      } else {
+        Serial.println("Resposta contem modo ou limites invalidos.");
       }
-      ok = true;
-    } else {
+    } else if (err) {
       Serial.printf("JSON inválido: %s\n", err.c_str());
     }
   } else {
@@ -218,34 +266,16 @@ bool enviarDadosParaServidor(float nivel, float litros) {
   return ok;
 }
 
-// Envia nivel=-1 para informar falha do sensor; a API registra a falha
-// e marca a bomba desligada. O corpo da resposta não é processado aqui.
-void enviarFalhaParaServidor() {
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  WiFiClient client;
-  HTTPClient http;
-  http.setTimeout(3000);
-  if (!http.begin(client, URL_NIVEL)) {
-    Serial.println("HTTPClient (falha): nao foi possivel iniciar requisicao.");
-    return;
-  }
-  http.addHeader("Content-Type", "application/json");
-
-  // Corpo JSON fixo para sinalizar falha, sem concatenações.
-  String payload = "{\"nivel\":-1,\"litros\":0,\"bombaLigada\":false}";
-  http.POST(payload);
-  http.end();
-}
-
 /* INICIALIZAÇÃO DOS PINOS, ATUADORES E REDE */
 void setup() {
+  // Primeira operacao do firmware: manter o rele desligado.
+  // O estado antes do setup ainda depende do circuito do modulo.
+  digitalWrite(PINO_RELE, RELE_ATIVO_EM_LOW ? HIGH : LOW);
+  pinMode(PINO_RELE, OUTPUT);
   Serial.begin(115200);
   delay(500);
-
   pinMode(PINO_TRIG, OUTPUT);
   pinMode(PINO_ECHO, INPUT);
-  pinMode(PINO_RELE, OUTPUT);
   for (int i = 0; i < 3; i++) pinMode(LEDS_NIVEL[i], OUTPUT);
   pinMode(LED_BOMBA, OUTPUT);
 
@@ -253,14 +283,23 @@ void setup() {
   acionarBomba(false);
   apagarLeds();
 
+  // 64 bits aleatorios por boot para invalidar comandos de outra sessao.
+  sessaoESP32 = String(esp_random(), HEX) + "-" + String(esp_random(), HEX);
   conectarWiFi();
 
   Serial.println("Controlador iniciado.");
 }
 
-/* CICLO PRINCIPAL: medir, controlar, sincronizar e sinalizar */
+/* Ciclo: medir, aplicar limites locais, sincronizar e indicar estado. */
 void loop() {
   garantirWiFi();
+
+  // Uma queda real do WiFi tambem invalida a operacao manual.
+  // Essa trava sera enviada na primeira telemetria apos a reconexao.
+  if (modoAtual == "manual" && WiFi.status() != WL_CONNECTED) {
+    bloqueioManual = true;
+    if (STATUS_BOMBA) acionarBomba(false);
+  }
 
   // Garante um intervalo mínimo entre os inícios das leituras.
   if (millis() - TEMPO_ULTIMA_LEITURA < INTERVALO_LEITURA_MS) {
@@ -275,50 +314,64 @@ void loop() {
   // Sem eco válido: desliga bomba e LEDs e informa a falha se houver rede.
   if (distancia < 0) {
     Serial.println("Falha na leitura do HC-SR04.");
+    ultimoNivelValido = -1.0f;
+    if (modoAtual == "manual") bloqueioManual = true;
     acionarBomba(false);
     apagarLeds();
-    enviarFalhaParaServidor();
+    aguardandoSincronizacaoAposFalha = true;
+    enviarDadosParaServidor(-1.0f, 0.0f);
     return;
   }
+  ultimoNivelValido = nivel;
+  float litros = nivel * CAPACIDADE_LITROS / 100.0f;
 
-  // 1. Automático: liga abaixo do mínimo e desliga acima do máximo.
+  // Não energiza a bomba no primeiro ciclo recuperado até confirmar
+  // modo e limites com o servidor. Uma resposta de falha já processada
+  // não basta: o modo pode ter mudado depois daquela resposta.
+  bool sincronizouNestaLeitura = false;
+  if (aguardandoSincronizacaoAposFalha) {
+    if (!enviarDadosParaServidor(nivel, litros)) {
+      acionarBomba(false);
+      if (modoAtual == "manual") bloqueioManual = true;
+      atualizarLedsNivel(nivel);
+      Serial.println("Sensor recuperado; aguardando sincronizacao antes de ligar.");
+      return;
+    }
+    aguardandoSincronizacaoAposFalha = false;
+    sincronizouNestaLeitura = true;
+  }
+
+  // 1. Automático: liga abaixo do mínimo e desliga ao atingir o máximo.
   // O estado é atualizado antes do POST para refletir o relé no envio.
   if (modoAtual == "automatico") {
     if (!STATUS_BOMBA && nivel < nivelMinimo) {
       acionarBomba(true);
-    } else if (STATUS_BOMBA && nivel > nivelMaximo) {
+    } else if (STATUS_BOMBA && nivel >= nivelMaximo) {
       acionarBomba(false);
     }
   }
 
-  // 2. Pré-corte: desliga a bomba antes de enviar um nível >= 98%.
-  if (STATUS_BOMBA && nivel >= NIVEL_CORTE_SEGURANCA) {
-    Serial.printf(
-                  "Pre-corte de seguranca: nivel %.1f%% >= %.0f%% - bomba DESLIGADA\n",
-                  nivel, NIVEL_CORTE_SEGURANCA);
-
+  // 2. O modo manual também respeita o máximo configurado (até 97%).
+  if (STATUS_BOMBA && atingiuLimite(nivel)) {
+    Serial.printf("Corte local: nivel %.1f%%, maximo %.1f%%.\n",
+                  nivel, nivelMaximo);
     acionarBomba(false);
   }
 
-  // 3. Envia a medição e recebe configurações/comando na mesma requisição.
-  float litros = nivel * CAPACIDADE_LITROS / 100.0f;
-  bool comunicacaoServidorOK = enviarDadosParaServidor(nivel, litros);
+  // 3. Evita um segundo POST se a recuperação já sincronizou nesta leitura.
+  // O estado do relé após o controle local será confirmado no próximo ciclo.
+  bool comunicacaoServidorOK = sincronizouNestaLeitura ||
+    enviarDadosParaServidor(nivel, litros);
 
-  // Em modo manual, a falha na comunicação desliga a bomba localmente.
-  if (!comunicacaoServidorOK && modoAtual == "manual" && STATUS_BOMBA) {
-    Serial.println(
-                   "Servidor indisponivel: bomba DESLIGADA no modo manual devido a queda do servidor."
-                  );
-    acionarBomba(false);
+  // Um POST falho exige um novo comando identificado após a recuperação.
+  if (!comunicacaoServidorOK && modoAtual == "manual") {
+    Serial.println("Falha de comunicacao: travando comandos manuais antigos.");
+    bloqueioManual = true;
+    if (STATUS_BOMBA) acionarBomba(false);
   }
 
-  // 4. Pós-corte: bloqueia eventual comando manual recebido acima do limite.
-  if (STATUS_BOMBA && nivel >= NIVEL_CORTE_SEGURANCA) {
-    Serial.printf(
-                  "Corte de seguranca local: nivel %.1f%% >= %.0f%% - bomba DESLIGADA\n",
-                  nivel, NIVEL_CORTE_SEGURANCA
-                 );
-
+  // 4. Defesa adicional após a atualização remota dos limites.
+  if (STATUS_BOMBA && atingiuLimite(nivel)) {
     acionarBomba(false);
   }
 
@@ -326,10 +379,7 @@ void loop() {
   atualizarLedsNivel(nivel);
 
   // 6. Registra medição e estado atual no monitor serial.
-  Serial.printf(
-                "Dist: %.1f cm | Nivel: %.1f%% | Bomba: %s | Modo: %s\n",
-                distancia, nivel,
-                STATUS_BOMBA ? "LIGADA" : "DESLIGADA",
-                modoAtual.c_str()
-               );
+  Serial.printf("Dist: %.1f cm | Nivel: %.1f%% | Bomba: %s | Modo: %s\n",
+                distancia, nivel, STATUS_BOMBA ? "LIGADA" : "DESLIGADA",
+                modoAtual.c_str());
 }

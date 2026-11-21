@@ -5,7 +5,19 @@
 let modo = "automatico";
 let nivel = 0; // valor inicial até o primeiro polling
 let litrosAtual = 0; // volume informado pelo backend
-let bombaLigada = false; // valor inicial até o primeiro polling
+// Estado lógico antigo preservado no backend; a UI exibe apenas confirmação.
+let bombaConfirmada = null;
+let bombaDesejada = false;
+let comandoPendente = false;
+// Uma requisição de ligar NÃO bloqueia o botão de desligar.
+let ligamentoEmAndamento = false;
+let desligamentoEmAndamento = false;
+let alteracaoModoEmAndamento = false;
+let salvamentoLimitesEmAndamento = false;
+// Alterações locais invalidam apenas respostas de status iniciadas antes delas.
+let revisaoEstadoLocal = 0;
+let esp32Online = false;
+let sensorOK = true;
 let minimo = 30;
 let maximo = 90;
 let ultimaMedicaoDataHora = null;
@@ -38,6 +50,8 @@ const inputMax = document.getElementById("maximo");
 const minValue = document.getElementById("minValue");
 const maxValue = document.getElementById("maxValue");
 const salvarLimites = document.getElementById("salvarLimites");
+const cancelarLimites = document.getElementById("cancelarLimites");
+const bombaDescricao = document.getElementById("bombaDescricao");
 const tabelaHistorico = document.getElementById("tabelaHistorico");
 const listaAlertas = document.getElementById("listaAlertas");
 const alertasDashboard = document.getElementById("alertas");
@@ -127,10 +141,12 @@ navLinks.forEach((link) => {
 
     navLinks.forEach((item) => {
       item.classList.remove("active");
+      item.removeAttribute("aria-current");
     });
 
     document.getElementById(pageId).classList.add("active-page");
     link.classList.add("active");
+    link.setAttribute("aria-current", "page");
 
     if (pageId === "historico") {
       buscarHistorico();
@@ -158,35 +174,37 @@ navLinks.forEach((link) => {
   });
 });
 
-/* INDICADOR DO ESTADO DE COMUNICAÇÃO */
 /* INDICADOR DE CONEXÃO
- * online: a API respondeu e sensorOK não é false.
- * sensor_falha: a API respondeu, mas sensorOK=false.
- * servidor_offline: a consulta à API falhou. */
-function atualizarIndicadorConexao(estado) {
-  const wifiStatusEl = document.getElementById("wifiStatus");
-  if (!wifiStatusEl) return;
-  // O status secundário é o elemento seguinte ao identificador wifiStatus.
-  const espStatusEl = wifiStatusEl.nextElementSibling;
+ * online: API respondeu, ESP32 online e sensorOK.
+ * esp32_offline: API respondeu, mas ESP32 sem telemetria recente.
+ * sensor_falha: ESP32 responde, porém não consegue medir.
+ * servidor_offline: falhou a consulta à API. */
+const INDICADORES_CONEXAO = {
+  online: ["● Conectado", "#68c989", "ESP32 • Online"],
+  sensor_falha: [
+    "● Sensor com falha",
+    "#ffd600",
+    "ESP32 • Online (sem leitura)",
+  ],
+  esp32_offline: ["● ESP32 offline", "#ef4040", "Servidor • Online"],
+  servidor_offline: ["● Sem conexão", "#ef4040", "Servidor • Offline"],
+};
 
-  if (estado === "online") {
-    wifiStatusEl.textContent = "● Conectado";
-    wifiStatusEl.style.color = "#68c989";
-    if (espStatusEl) espStatusEl.textContent = "ESP32 • Online";
-  } else if (estado === "sensor_falha") {
-    wifiStatusEl.textContent = "● Sensor com falha";
-    wifiStatusEl.style.color = "#ffd600";
-    if (espStatusEl) espStatusEl.textContent = "ESP32 • Atenção";
-  } else {
-    wifiStatusEl.textContent = "● Sem conexão";
-    wifiStatusEl.style.color = "#ef4040";
-    if (espStatusEl) espStatusEl.textContent = "Servidor • Offline";
-  }
+function atualizarIndicadorConexao(estado) {
+  const wifi = document.getElementById("wifiStatus");
+  if (!wifi) return;
+  const indicador = Object.hasOwn(INDICADORES_CONEXAO, estado)
+    ? INDICADORES_CONEXAO[estado]
+    : INDICADORES_CONEXAO.servidor_offline;
+  const [texto, cor, detalhe] = indicador;
+  wifi.textContent = texto;
+  wifi.style.color = cor;
+  if (wifi.nextElementSibling) wifi.nextElementSibling.textContent = detalhe;
 }
 
 /* RENDERIZAÇÃO DO DASHBOARD */
 
-function atualizarDashboard() {
+function atualizarReservatorio() {
   percentual.textContent = nivel + "%";
   litros.textContent = Math.round(litrosAtual) + " litros";
   agua.style.height = nivel + "%";
@@ -207,10 +225,37 @@ function atualizarDashboard() {
   if (alturaEl) {
     alturaEl.textContent = ((nivel / 100) * ALTURA_UTIL_CM).toFixed(1) + " cm";
   }
+}
 
-  bombaStatus.textContent = bombaLigada ? "Ligada" : "Desligada";
-  bombaStatus.style.color = bombaLigada ? "#27a355" : "#ef4040";
+function atualizarBomba() {
+  // Não apresentar a intenção de ligar como confirmação do relé físico.
+  bombaStatus.textContent =
+    bombaConfirmada === null
+      ? "Sem confirmação"
+      : bombaConfirmada
+        ? "Ligada"
+        : "Desligada";
+  bombaStatus.style.color =
+    bombaConfirmada === null
+      ? "#59677a"
+      : bombaConfirmada
+        ? "#27a355"
+        : "#ef4040";
+  if (bombaDescricao) {
+    if (!esp32Online) {
+      bombaDescricao.textContent = "ESP32 offline: estado físico desconhecido.";
+    } else if (comandoPendente) {
+      bombaDescricao.textContent = `Solicitado: ${bombaDesejada ? "ligar" : "desligar"}. Aguardando confirmação do ESP32.`;
+    } else if (!sensorOK) {
+      bombaDescricao.textContent = "Sensor com falha. Verifique as conexões.";
+    } else {
+      bombaDescricao.textContent =
+        "Estado informado pela última telemetria do ESP32.";
+    }
+  }
+}
 
+function atualizarMedicaoENivel() {
   // Distingue o horário da última medição do horário do redesenho.
   const ultimaMedicaoData = ultimaMedicaoDataHora
     ? new Date(ultimaMedicaoDataHora)
@@ -233,14 +278,12 @@ function atualizarDashboard() {
     nivelStatus.textContent = "Nível normal";
     nivelStatus.parentElement.style.color = "#29a45d";
   }
+}
 
-  if (modo === "automatico") {
-    btnAutomatico.classList.add("active-mode");
-    btnManual.classList.remove("active-mode");
-  } else {
-    btnManual.classList.add("active-mode");
-    btnAutomatico.classList.remove("active-mode");
-  }
+function atualizarModo() {
+  const automatico = modo === "automatico";
+  btnAutomatico.classList.toggle("active-mode", automatico);
+  btnManual.classList.toggle("active-mode", !automatico);
 
   const acionamentoBomba = document.getElementById("acionamentoBomba");
 
@@ -263,10 +306,14 @@ function atualizarDashboard() {
     modoConfiguracao.textContent =
       modo === "automatico" ? "Automático" : "Manual";
   }
+}
 
+function atualizarLimitesEControles() {
   /* Histerese automática: liga abaixo do mínimo, desliga acima do
    * máximo e mantém o estado na faixa entre os dois limiares. */
-  const banda = Math.max(0, maximo - minimo);
+  const banda = limitesEmEdicao
+    ? Math.max(0, limitesRascunho.maximo - limitesRascunho.minimo)
+    : Math.max(0, maximo - minimo);
 
   if (bandaValue) {
     bandaValue.textContent = Math.round(banda);
@@ -276,20 +323,38 @@ function atualizarDashboard() {
     bandaConfiguracao.textContent = Math.round(banda) + "%";
   }
 
-  /* Não atualiza sliders focados durante o polling para evitar
-   * sobrescrever valores ainda em edição. */
-  if (document.activeElement !== inputMin) {
+  // O rascunho é independente do foco: polling não apaga alterações.
+  if (!limitesEmEdicao) {
     inputMin.value = minimo;
-    minValue.textContent = minimo;
-  }
-
-  if (document.activeElement !== inputMax) {
     inputMax.value = maximo;
+    minValue.textContent = minimo;
     maxValue.textContent = maximo;
   }
+  if (cancelarLimites)
+    cancelarLimites.disabled = salvamentoLimitesEmAndamento || !limitesEmEdicao;
+  salvarLimites.disabled = salvamentoLimitesEmAndamento;
+  inputMin.disabled = salvamentoLimitesEmAndamento;
+  inputMax.disabled = salvamentoLimitesEmAndamento;
 
-  ligarBomba.disabled = modo !== "manual";
-  desligarBomba.disabled = modo !== "manual";
+  const controlesModoBloqueados =
+    alteracaoModoEmAndamento || ligamentoEmAndamento || desligamentoEmAndamento;
+  btnAutomatico.disabled = controlesModoBloqueados;
+  btnManual.disabled = controlesModoBloqueados;
+  ligarBomba.disabled =
+    modo !== "manual" || !esp32Online || !sensorOK || controlesModoBloqueados;
+  // Prioridade de segurança: desligar fica disponível enquanto um pedido
+  // anterior de ligar ainda aguarda resposta. Não permite OFF duplicado.
+  desligarBomba.disabled =
+    modo !== "manual" || alteracaoModoEmAndamento || desligamentoEmAndamento;
+}
+
+// Cada grupo atualiza apenas a sua seção, preservando a ordem de renderização.
+function atualizarDashboard() {
+  atualizarReservatorio();
+  atualizarBomba();
+  atualizarMedicaoENivel();
+  atualizarModo();
+  atualizarLimitesEControles();
 }
 
 /* FORMATAÇÃO DE DADOS E UNIDADES */
@@ -325,256 +390,260 @@ async function buscarEstatisticas() {
       if (el) el.textContent = valor;
     };
 
-    /* Preenche os indicadores resumidos do dashboard. */
-    set("statsNivelMedio", formatarPercentual(stats.nivelMedio));
-    set("statsNivelMaximo", formatarPercentual(stats.nivelMaximo));
-    set("statsNivelMinimo", formatarPercentual(stats.nivelMinimo));
-    set("statsConsumo", formatarLitros(stats.consumoEstimado));
-
-    /* Preenche os indicadores da página Relatórios. */
-    set("reportNivelMedio", formatarPercentual(stats.nivelMedio));
-    set("reportNivelMaximo", formatarPercentual(stats.nivelMaximo));
-    set("reportNivelMinimo", formatarPercentual(stats.nivelMinimo));
-    set("reportAcionamentos", formatarNumero(stats.acionamentos));
+    const indicadores = {
+      statsNivelMedio: formatarPercentual(stats.nivelMedio),
+      statsNivelMaximo: formatarPercentual(stats.nivelMaximo),
+      statsNivelMinimo: formatarPercentual(stats.nivelMinimo),
+      statsConsumo: formatarLitros(stats.consumoEstimado),
+      reportNivelMedio: formatarPercentual(stats.nivelMedio),
+      reportNivelMaximo: formatarPercentual(stats.nivelMaximo),
+      reportNivelMinimo: formatarPercentual(stats.nivelMinimo),
+      reportAcionamentos: formatarNumero(stats.acionamentos),
+    };
+    for (const [id, valor] of Object.entries(indicadores)) set(id, valor);
   } catch (erro) {
     console.error("Erro ao carregar estatísticas:", erro);
   }
 }
 
-/* COMANDO MANUAL: LIGAR BOMBA */
-
-ligarBomba.addEventListener("click", async () => {
-  if (modo !== "manual") {
-    alert("Controle disponível somente no modo manual.");
-    return;
-  }
-
-  if (nivel >= maximo) {
-    alert("A bomba não pode ser ligada. Limite máximo atingido.");
-
-    return;
-  }
-
-  try {
-    const resposta = await fetch("/api/bomba", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        ligar: true,
-      }),
-    });
-
-    const dados = await resposta.json();
-
-    if (!resposta.ok) {
-      alert(dados.erro || "Erro ao ligar a bomba.");
-
-      return;
-    }
-
-    bombaLigada = true;
-    atualizarDashboard();
-  } catch (erro) {
-    console.error("Erro:", erro);
-  }
-});
-
-/* COMANDO MANUAL: DESLIGAR BOMBA */
-
-desligarBomba.addEventListener("click", async () => {
-  if (modo !== "manual") {
-    alert("Controle disponível somente no modo manual.");
-    return;
-  }
-
-  try {
-    const resposta = await fetch("/api/bomba", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        ligar: false,
-      }),
-    });
-
-    const dados = await resposta.json();
-
-    if (!resposta.ok) {
-      alert(dados.erro || "Erro ao desligar a bomba.");
-
-      return;
-    }
-
-    bombaLigada = false;
-    atualizarDashboard();
-  } catch (erro) {
-    console.error("Erro:", erro);
-  }
-});
-
-/* SELEÇÃO DO MODO AUTOMÁTICO */
-
-btnAutomatico.addEventListener("click", async () => {
-  try {
-    const resposta = await fetch("/api/modo", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        modo: "automatico",
-      }),
-    });
-
-    const dados = await resposta.json();
-
-    if (!resposta.ok) {
-      alert(dados.erro || "Erro ao alterar modo.");
-
-      return;
-    }
-
-    modo = "automatico";
-    atualizarDashboard();
-  } catch (erro) {
-    console.error("Erro:", erro);
-  }
-});
-
-/* SELEÇÃO DO MODO MANUAL */
-
-btnManual.addEventListener("click", async () => {
-  try {
-    const resposta = await fetch("/api/modo", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        modo: "manual",
-      }),
-    });
-
-    const dados = await resposta.json();
-
-    if (!resposta.ok) {
-      alert(dados.erro || "Erro ao alterar modo.");
-
-      return;
-    }
-
-    modo = "manual";
-    atualizarDashboard();
-  } catch (erro) {
-    console.error("Erro:", erro);
-  }
-});
-
-/* ATUALIZAÇÃO VISUAL DOS SLIDERS */
-
-inputMin.addEventListener("input", () => {
-  minValue.textContent = inputMin.value;
-});
-
-inputMax.addEventListener("input", () => {
-  maxValue.textContent = inputMax.value;
-});
-
-/* TRATAMENTO DE FOCO DOS SLIDERS
- * Ao perder o foco, o slider retorna ao valor confirmado, exceto
- * quando o usuário está iniciando um clique em Salvar. A flag é
- * marcada no mousedown/keydown; relatedTarget reconhece o botão.
- * Clicar fora força o blur e mouseup limpa a flag mesmo se um clique
- * for cancelado. O click de Salvar lê diretamente os valores atuais. */
-let salvarLimitesPendente = false;
-
-salvarLimites.addEventListener("mousedown", () => {
-  salvarLimitesPendente = true;
-});
-
-salvarLimites.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" || e.key === " ") {
-    salvarLimitesPendente = true;
-  }
-});
-
-/* O mouseup vem antes do click; limpar a flag evita que uma
- * tentativa de clique cancelada bloqueie restaurações futuras. */
-document.addEventListener("mouseup", () => {
-  salvarLimitesPendente = false;
-});
-
-function resetarSliderSeAplicavel(input, valorAutoritativo, spanValue, e) {
-  if (salvarLimitesPendente) return;
-  if (e && e.relatedTarget === salvarLimites) return;
-  input.value = valorAutoritativo;
-  spanValue.textContent = valorAutoritativo;
+// Aplicar a resposta sem transformar o comando desejado em estado confirmado.
+function aplicarEstadoDaBomba(dados) {
+  bombaConfirmada =
+    typeof dados.bombaConfirmada === "boolean" ? dados.bombaConfirmada : null;
+  bombaDesejada = dados.bombaDesejada === true;
+  comandoPendente = dados.comandoPendente === true;
+  if (typeof dados.esp32Online === "boolean") esp32Online = dados.esp32Online;
+  if (typeof dados.sensorOK === "boolean") sensorOK = dados.sensorOK;
 }
 
-inputMin.addEventListener("blur", (e) => {
-  resetarSliderSeAplicavel(inputMin, minimo, minValue, e);
-});
+/* REQUISIÇÕES DE CONTROLE E CONFIRMAÇÃO */
+// ID temporário deste painel e sequência crescente para /api/bomba e /api/modo.
+// Não é autenticação: serve apenas para rejeitar solicitações fora de ordem.
+// Ao recarregar a página, um novo ID impede conflito com números antigos.
+const clienteControleId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+let sequenciaControle = 0;
 
-inputMax.addEventListener("blur", (e) => {
-  resetarSliderSeAplicavel(inputMax, maximo, maxValue, e);
-});
+function proximaOrdemControle() {
+  return {
+    clienteControleId,
+    sequenciaControle: ++sequenciaControle,
+  };
+}
 
-/* Força a perda de foco ao clicar fora dos sliders e do botão
- * Salvar. contains() também considera cliques em filhos desse botão. */
-document.addEventListener("mousedown", (e) => {
-  if (e.target === inputMin || e.target === inputMax) return;
-  if (salvarLimites.contains(e.target)) return;
-  if (document.activeElement === inputMin) inputMin.blur();
-  if (document.activeElement === inputMax) inputMax.blur();
-});
+// Um timeout libera os controles quando a rede não responde. Abort não
+// garante que o servidor tenha cancelado a operação: nunca anunciar que
+// um comando falhou com certeza quando sua confirmação HTTP foi perdida.
+async function requisitarJSON(url, opcoes, timeoutMs = 15000) {
+  const controlador =
+    typeof AbortController === "function" ? new AbortController() : null;
+  const opcoesFinais = controlador
+    ? { ...(opcoes || {}), signal: controlador.signal }
+    : opcoes;
+  const temporizador =
+    controlador && typeof setTimeout === "function"
+      ? setTimeout(() => controlador.abort(), timeoutMs)
+      : null;
+  try {
+    const resposta = await fetch(url, opcoesFinais);
+    const dados = await resposta.json();
+    return { resposta, dados };
+  } finally {
+    if (temporizador !== null) clearTimeout(temporizador);
+  }
+}
+
+function opcoesPOST(corpo) {
+  return {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(corpo),
+  };
+}
+
+async function solicitarBomba(ligar) {
+  if (modo !== "manual" || alteracaoModoEmAndamento) {
+    alert(
+      "Controle disponível somente no modo manual, sem alteração de modo em andamento.",
+    );
+    return;
+  }
+  if (ligar && nivel >= maximo) {
+    alert("A bomba não pode ser ligada. Limite máximo atingido.");
+    return;
+  }
+  if (ligar && (!esp32Online || !sensorOK)) {
+    alert("Não é possível ligar: ESP32 offline ou sensor indisponível.");
+    return;
+  }
+  if (ligar && (ligamentoEmAndamento || desligamentoEmAndamento)) return;
+  if (!ligar && desligamentoEmAndamento) return;
+
+  // Não bloqueia DESLIGAR enquanto LIGAR está pendente. Se as duas
+  // requisições chegarem invertidas, o backend ignora o LIGAR antigo.
+  if (ligar) ligamentoEmAndamento = true;
+  else desligamentoEmAndamento = true;
+  const ordem = proximaOrdemControle();
+  revisaoEstadoLocal++;
+  atualizarDashboard();
+  try {
+    const { resposta, dados } = await requisitarJSON(
+      "/api/bomba",
+      opcoesPOST({ ligar, ...ordem }),
+    );
+    // Respostas antigas nunca reescrevem a última intenção do usuário.
+    if (ordem.sequenciaControle !== sequenciaControle) return;
+    if (!resposta.ok) {
+      alert(
+        dados.erro ||
+          `Não foi possível solicitar ${ligar ? "ligar" : "desligar"} a bomba.`,
+      );
+      return;
+    }
+    revisaoEstadoLocal++;
+    aplicarEstadoDaBomba(dados);
+    atualizarDashboard();
+  } catch (erro) {
+    console.error("Falha ao solicitar comando da bomba:", erro);
+    if (ordem.sequenciaControle === sequenciaControle) {
+      alert(
+        `Não foi possível confirmar o pedido de ${ligar ? "ligar" : "desligar"}. A operação pode ter chegado ao servidor. Consulte o estado da bomba antes de tentar novamente.`,
+      );
+      void buscarDados();
+    }
+  } finally {
+    if (ligar) ligamentoEmAndamento = false;
+    else desligamentoEmAndamento = false;
+    atualizarDashboard();
+  }
+}
+
+ligarBomba.addEventListener("click", () => solicitarBomba(true));
+desligarBomba.addEventListener("click", () => solicitarBomba(false));
+
+/* SELEÇÃO DE MODO: apenas um POST por vez. A resposta confirmada pelo
+ * servidor, nunca um valor fixo do botão, determina o estado exibido. */
+async function solicitarModo(novoModo) {
+  if (
+    alteracaoModoEmAndamento ||
+    ligamentoEmAndamento ||
+    desligamentoEmAndamento
+  ) {
+    return;
+  }
+  alteracaoModoEmAndamento = true;
+  const ordem = proximaOrdemControle();
+  revisaoEstadoLocal++;
+  atualizarDashboard();
+  try {
+    const { resposta, dados } = await requisitarJSON(
+      "/api/modo",
+      opcoesPOST({ modo: novoModo, ...ordem }),
+    );
+    if (!resposta.ok) {
+      alert(dados.erro || "Não foi possível alterar o modo.");
+      return;
+    }
+    revisaoEstadoLocal++;
+    modo = dados.modo;
+    aplicarEstadoDaBomba(dados);
+    atualizarDashboard();
+  } catch (erro) {
+    console.error("Falha ao alterar o modo:", erro);
+    alert(
+      "Não foi possível confirmar a mudança de modo. O servidor pode ter recebido a solicitação. Verifique o modo atual antes de tentar novamente.",
+    );
+    void buscarDados();
+  } finally {
+    alteracaoModoEmAndamento = false;
+    atualizarDashboard();
+  }
+}
+
+btnAutomatico.addEventListener("click", () => solicitarModo("automatico"));
+btnManual.addEventListener("click", () => solicitarModo("manual"));
+
+/* EDIÇÃO DOS LIMITES: rascunho separado dos valores confirmados.
+ * Blur, click fora e polling NÃO descartam a edição. Cancelar restaura.
+ * Isso funciona com mouse, teclado e tela sensível ao toque. */
+let limitesEmEdicao = false;
+let limitesRascunho = { minimo, maximo };
+
+function atualizarRascunhoLimites() {
+  limitesEmEdicao = true;
+  limitesRascunho = {
+    minimo: Number(inputMin.value),
+    maximo: Number(inputMax.value),
+  };
+  minValue.textContent = limitesRascunho.minimo;
+  maxValue.textContent = limitesRascunho.maximo;
+  if (bandaValue) {
+    bandaValue.textContent = Math.max(
+      0,
+      limitesRascunho.maximo - limitesRascunho.minimo,
+    );
+  }
+  cancelarLimites.disabled = false;
+}
+
+function encerrarEdicaoLimites() {
+  limitesEmEdicao = false;
+  limitesRascunho = { minimo, maximo };
+  atualizarDashboard();
+}
+
+inputMin.addEventListener("input", atualizarRascunhoLimites);
+inputMax.addEventListener("input", atualizarRascunhoLimites);
+cancelarLimites.addEventListener("click", encerrarEdicaoLimites);
 
 /* ENVIO DOS LIMITES AO BACKEND */
 
 salvarLimites.addEventListener("click", async () => {
-  const novoMinimo = Number(inputMin.value);
-  const novoMaximo = Number(inputMax.value);
+  if (salvamentoLimitesEmAndamento) return;
+  const novoMinimo = limitesEmEdicao ? limitesRascunho.minimo : minimo;
+  const novoMaximo = limitesEmEdicao ? limitesRascunho.maximo : maximo;
 
-  /* Restaura o comportamento normal de blur antes da requisição. */
-  salvarLimitesPendente = false;
-
-  if (novoMinimo >= novoMaximo) {
-    alert("O limite mínimo deve ser menor que o máximo.");
-
+  if (
+    !Number.isFinite(novoMinimo) ||
+    !Number.isFinite(novoMaximo) ||
+    novoMinimo < 1 ||
+    novoMaximo > 97 ||
+    novoMinimo >= novoMaximo
+  ) {
+    alert(
+      "Escolha mínimo entre 1% e 96% e máximo maior que o mínimo, até 97%.",
+    );
     return;
   }
 
+  // Impede POSTs sobrepostos e preserva os sliders enquanto salva.
+  salvamentoLimitesEmAndamento = true;
+  revisaoEstadoLocal++;
+  atualizarDashboard();
   try {
-    const resposta = await fetch("/api/limites", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        minimo: novoMinimo,
-        maximo: novoMaximo,
-      }),
-    });
-
-    const dados = await resposta.json();
+    const { resposta, dados } = await requisitarJSON(
+      "/api/limites",
+      opcoesPOST({ minimo: novoMinimo, maximo: novoMaximo }),
+    );
 
     if (!resposta.ok) {
       alert(dados.erro || "Erro ao salvar limites.");
-
       return;
     }
 
-    minimo = novoMinimo;
-    maximo = novoMaximo;
-
-    /* Reflete os valores salvos sem esperar pelo próximo polling. */
-    atualizarDashboard();
-
+    revisaoEstadoLocal++;
+    minimo = dados.minimo;
+    maximo = dados.maximo;
+    encerrarEdicaoLimites();
     alert("Limites atualizados.");
   } catch (erro) {
-    console.error("Erro:", erro);
+    console.error("Falha ao salvar limites:", erro);
+    alert(
+      "Não foi possível confirmar os novos limites. O servidor pode ter recebido a alteração. Consulte os valores atuais antes de tentar novamente.",
+    );
+    void buscarDados();
+  } finally {
+    salvamentoLimitesEmAndamento = false;
+    atualizarDashboard();
   }
 });
 
@@ -622,15 +691,6 @@ async function atualizarGrafico() {
 
     const historico = await resposta.json();
 
-    if (historico.length === 0) {
-      grafico.data.labels = [];
-      grafico.data.datasets[0].data = [];
-
-      grafico.update();
-
-      return;
-    }
-
     const registros = historico.slice(-20);
 
     const horarios = registros.map((registro) => {
@@ -655,42 +715,59 @@ async function atualizarGrafico() {
 }
 
 /* ATUALIZAÇÃO DO ESTADO VIA /api/status */
+// Uma única consulta em andamento: em redes lentas, novas chamadas reutilizam
+// a mesma Promise. Um timeout permite tentar novamente se a rede travar.
+// POSTs invalidam SOMENTE as consultas iniciadas antes da operação.
+let consultaStatusEmAndamento = null;
 
-async function buscarDados() {
-  try {
-    const resposta = await fetch("/api/status");
+function buscarDados() {
+  if (consultaStatusEmAndamento) return consultaStatusEmAndamento;
+  const revisaoNoInicio = revisaoEstadoLocal;
+  const consulta = (async () => {
+    try {
+      const { resposta, dados } = await requisitarJSON("/api/status");
+      if (revisaoNoInicio !== revisaoEstadoLocal) return;
+      if (!resposta.ok) throw new Error("Erro ao buscar dados.");
 
-    if (!resposta.ok) {
-      throw new Error("Erro ao buscar dados.");
+      nivel = dados.nivel;
+      ultimaMedicaoDataHora = dados.ultimaLeituraDataHora || null;
+      litrosAtual = Number(dados.litros) || 0;
+      aplicarEstadoDaBomba(dados);
+      minimo = dados.minimo;
+      maximo = dados.maximo;
+      modo = dados.modo;
+
+      if (sensorBanner) {
+        const falhaSensor = dados.sensorOK === false;
+        const esp32Desconectado = dados.esp32Online === false;
+        sensorBanner.classList.toggle(
+          "hidden",
+          !falhaSensor && !esp32Desconectado,
+        );
+        sensorBanner.textContent = esp32Desconectado
+          ? "ESP32 sem comunicação. Estado da bomba não confirmado."
+          : "Sensor de nível com falha. Exibindo a última leitura válida.";
+      }
+
+      atualizarIndicadorConexao(
+        !esp32Online ? "esp32_offline" : !sensorOK ? "sensor_falha" : "online",
+      );
+      atualizarDashboard();
+    } catch (erro) {
+      if (revisaoNoInicio !== revisaoEstadoLocal) return;
+      console.error("Erro de comunicação:", erro);
+      esp32Online = false;
+      bombaConfirmada = null;
+      atualizarIndicadorConexao("servidor_offline");
+      atualizarDashboard();
     }
-
-    const dados = await resposta.json();
-
-    nivel = dados.nivel;
-    ultimaMedicaoDataHora = dados.ultimaLeituraDataHora || null;
-    /* Utiliza o volume calculado pelo firmware e repassado pela API. */
-    litrosAtual = Number(dados.litros) || 0;
-    bombaLigada = dados.bombaLigada;
-    minimo = dados.minimo;
-    maximo = dados.maximo;
-    modo = dados.modo;
-
-    /* Sensor com falha ou ESP32 sem comunicação: mostra o aviso. */
-    if (sensorBanner) {
-      sensorBanner.classList.toggle("hidden", dados.sensorOK !== false);
-    }
-
-    /* Diferencia falha do sensor de falha na consulta ao servidor. */
-    atualizarIndicadorConexao(
-      dados.sensorOK === false ? "sensor_falha" : "online",
-    );
-
-    atualizarDashboard();
-  } catch (erro) {
-    console.error("Erro de comunicação:", erro);
-    /* Se a consulta falhar, mostra o estado de servidor offline. */
-    atualizarIndicadorConexao("servidor_offline");
-  }
+  })();
+  consultaStatusEmAndamento = consulta;
+  void consulta.finally(() => {
+    if (consultaStatusEmAndamento === consulta)
+      consultaStatusEmAndamento = null;
+  });
+  return consulta;
 }
 
 /* POLLING DE STATUS, HISTÓRICOS E ALERTAS A CADA 5 s */
@@ -707,11 +784,7 @@ setInterval(() => {
   buscarAlertas();
 }, 5000);
 
-/* CARGA INICIAL
- * Declarações de função podem ser chamadas antes de sua posição no
- * arquivo devido ao hoisting do JavaScript. */
-/* Disparam a primeira carga de dados; o hoisting de function declarations
-   permite referenciar funções definidas mais abaixo. */
+// Primeira carga; as funções declaradas abaixo estão disponíveis por hoisting.
 
 buscarDados();
 atualizarGrafico();
@@ -752,15 +825,7 @@ async function buscarHistorico() {
       .slice()
       .reverse()
       .forEach((registro) => {
-        const dataHora = new Date(registro.dataHora);
-
-        const data = dataHora.toLocaleDateString("pt-BR");
-
-        const hora = dataHora.toLocaleTimeString("pt-BR", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        });
+        const { data, hora } = formatarDataHora(registro.dataHora);
 
         const bombaTexto =
           registro.bombaLigada === true
@@ -802,32 +867,36 @@ async function buscarHistorico() {
   }
 }
 
-/* Carrega a tabela de medições ao abrir a aplicação. */
-
 buscarHistorico();
+
+/* Formatação compartilhada por alertas, eventos e histórico. */
+function formatarDataHora(valor) {
+  const dataHora = new Date(valor);
+  return {
+    data: dataHora.toLocaleDateString("pt-BR"),
+    hora: dataHora.toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }),
+  };
+}
 
 /* ALERTAS ATIVOS E HISTÓRICO */
 
+const TITULOS_ALERTAS = {
+  nivel_critico: "Nível crítico",
+  corte_seguranca: "Corte de segurança",
+  esp32_offline: "ESP32 offline",
+  sensor_falha: "Falha no sensor",
+};
+
 /* Gera o HTML de um alerta, com data apenas na visualização detalhada. */
 function criarAlertaHTML(alerta, mostrarData = false) {
-  const dataHora = new Date(alerta.dataHora);
-
-  const data = dataHora.toLocaleDateString("pt-BR");
-
-  const hora = dataHora.toLocaleTimeString("pt-BR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-
-  const titulo =
-    alerta.tipo === "nivel_critico"
-      ? "Nível crítico"
-      : alerta.tipo === "corte_seguranca"
-        ? "Corte de segurança"
-        : alerta.tipo === "esp32_offline"
-          ? "ESP32 offline"
-          : alerta.tipo;
+  const { data, hora } = formatarDataHora(alerta.dataHora);
+  const titulo = Object.hasOwn(TITULOS_ALERTAS, alerta.tipo)
+    ? TITULOS_ALERTAS[alerta.tipo]
+    : alerta.tipo;
 
   const nivelTexto =
     alerta.nivel !== undefined ? ` Nível registrado: ${alerta.nivel}%.` : "";
@@ -842,6 +911,15 @@ function criarAlertaHTML(alerta, mostrarData = false) {
             </div>
         </div>
     `;
+}
+
+// O slice evita inverter o próprio histórico armazenado.
+function renderizarAlertas(alertas, mostrarData) {
+  return alertas
+    .slice()
+    .reverse()
+    .map((alerta) => criarAlertaHTML(alerta, mostrarData))
+    .join("");
 }
 
 async function buscarAlertas() {
@@ -862,44 +940,26 @@ async function buscarAlertas() {
     if (alertasDashboard) alertasDashboard.innerHTML = "";
 
     if (listaAlertas) {
-      listaAlertas.innerHTML = "<h4>Alertas ativos</h4>";
-      if (alertasAtivos.length === 0) {
-        listaAlertas.innerHTML += "<p>Nenhum alerta ativo.</p>";
-      } else {
-        alertasAtivos
-          .slice()
-          .reverse()
-          .forEach((alerta) => {
-            listaAlertas.innerHTML += criarAlertaHTML(alerta, true);
-          });
-      }
-
-      listaAlertas.innerHTML +=
-        '<h4 class="alert-history-title">Histórico de alertas</h4>';
-      if (historicoAlertas.length === 0) {
-        listaAlertas.innerHTML += "<p>Nenhum alerta registrado.</p>";
-      } else {
-        historicoAlertas
-          .slice()
-          .reverse()
-          .forEach((alerta) => {
-            listaAlertas.innerHTML += criarAlertaHTML(alerta, true);
-          });
-      }
+      listaAlertas.innerHTML =
+        "<h4>Alertas ativos</h4>" +
+        (alertasAtivos.length
+          ? renderizarAlertas(alertasAtivos, true)
+          : "<p>Nenhum alerta ativo.</p>") +
+        '<h4 class="alert-history-title">Histórico de alertas</h4>' +
+        (historicoAlertas.length
+          ? renderizarAlertas(historicoAlertas, true)
+          : "<p>Nenhum alerta registrado.</p>");
     }
 
     if (alertasDashboard) {
-      if (alertasAtivos.length === 0) {
-        alertasDashboard.innerHTML = "<p>Nenhum alerta ativo.</p>";
-      } else {
-        alertasAtivos
-          .slice()
-          .reverse()
-          .slice(0, 2)
-          .forEach((alerta) => {
-            alertasDashboard.innerHTML += criarAlertaHTML(alerta, false);
-          });
-      }
+      alertasDashboard.innerHTML = alertasAtivos.length
+        ? alertasAtivos
+            .slice()
+            .reverse()
+            .slice(0, 2)
+            .map((alerta) => criarAlertaHTML(alerta, false))
+            .join("")
+        : "<p>Nenhum alerta ativo.</p>";
     }
   } catch (erro) {
     console.error("Erro ao carregar alertas:", erro);
@@ -910,29 +970,24 @@ async function buscarAlertas() {
   }
 }
 
-/* Carrega os alertas na inicialização. */
-
 buscarAlertas();
 
 /* ÚLTIMOS ACIONAMENTOS DA BOMBA */
 
 function criarEventoBombaHTML(evento) {
-  const dataHora = new Date(evento.dataHora);
-
-  const data = dataHora.toLocaleDateString("pt-BR");
-
-  const hora = dataHora.toLocaleTimeString("pt-BR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+  const { data, hora } = formatarDataHora(evento.dataHora);
 
   const estado =
     evento.estado === "ligada" ? "Bomba ligada" : "Bomba desligada";
 
   const icone = evento.estado === "ligada" ? "▶" : "■";
 
-  const modoEvento = evento.modo === "automatico" ? "Automático" : "Manual";
+  const modoEvento =
+    evento.modo === "automatico"
+      ? "Automático"
+      : evento.modo === "manual"
+        ? "Manual"
+        : "Não informado";
 
   return `
         <div class="evento-bomba">
@@ -970,9 +1025,10 @@ async function buscarUltimosEventos() {
       .slice()
       .sort((a, b) => new Date(b.dataHora) - new Date(a.dataHora));
 
-    eventosOrdenados.slice(0, 5).forEach((evento) => {
-      eventosDashboard.innerHTML += criarEventoBombaHTML(evento);
-    });
+    eventosDashboard.innerHTML = eventosOrdenados
+      .slice(0, 5)
+      .map(criarEventoBombaHTML)
+      .join("");
   } catch (erro) {
     console.error("Erro ao carregar eventos da bomba:", erro);
 

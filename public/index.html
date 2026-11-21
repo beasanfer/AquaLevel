@@ -5,7 +5,6 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>AquaLevel</title>
 
-        <!-- Folha de estilos da interface. -->
         <link rel="stylesheet" href="style.css" />
 
         <!-- Chart.js é entregue por /vendor/chartjs, rota estática do backend.
@@ -23,37 +22,45 @@
                 <h2>AquaLevel</h2>
             </div>
 
-            <!-- data-page aponta para o id da página correspondente. -->
             <div class="menu">
-                <a class="nav-link active" data-page="dashboard">
+                <button
+                    type="button"
+                    class="nav-link active"
+                    data-page="dashboard"
+                    aria-current="page"
+                >
                     <img src="./icons/dashboard.png" alt="" />
                     Dashboard
-                </a>
+                </button>
 
-                <a class="nav-link" data-page="historico">
+                <button type="button" class="nav-link" data-page="historico">
                     <img src="./icons/historico.png" alt="" />
                     Histórico
-                </a>
+                </button>
 
-                <a class="nav-link" data-page="alertas-page">
+                <button type="button" class="nav-link" data-page="alertas-page">
                     <img src="./icons/alerta.png" alt="" />
                     Alertas
-                </a>
+                </button>
 
-                <a class="nav-link" data-page="configuracoes">
+                <button
+                    type="button"
+                    class="nav-link"
+                    data-page="configuracoes"
+                >
                     <img src="./icons/configuracao.png" alt="" />
                     Configurações
-                </a>
+                </button>
 
-                <a class="nav-link" data-page="relatorios">
+                <button type="button" class="nav-link" data-page="relatorios">
                     <img src="./icons/relatorio.png" alt="" />
                     Relatórios
-                </a>
+                </button>
 
-                <a class="nav-link" data-page="sobre">
+                <button type="button" class="nav-link" data-page="sobre">
                     <img src="./icons/informacao.png" alt="" />
                     Sobre
-                </a>
+                </button>
             </div>
 
             <!-- Controles de fonte e alto contraste persistidos por script.js. -->
@@ -90,10 +97,9 @@
                 </button>
             </div>
 
-            <!-- Indicador atualizado conforme o estado retornado pela API. -->
             <div class="connection">
-                <strong id="wifiStatus">● Conectado</strong>
-                <span>ESP32 • Online</span>
+                <strong id="wifiStatus">● Verificando</strong>
+                <span>ESP32 • Aguardando dados</span>
             </div>
         </nav>
 
@@ -116,9 +122,7 @@
                 ⚠ Sensor de nível com falha — exibindo a última leitura válida.
             </div>
 
-            <!-- Visão rápida do nível, bomba, modo e controles. -->
             <section class="grid-top">
-                <!-- Nível, volume e ilustração do tanque atualizados via script.js. -->
                 <article class="card nivel-card">
                     <h3>NÍVEL DO RESERVATÓRIO</h3>
 
@@ -158,7 +162,13 @@
 
                     <h2 id="bombaStatus">--</h2>
 
-                    <p class="bomba-descricao">Aguardando leitura...</p>
+                    <p
+                        id="bombaDescricao"
+                        class="bomba-descricao"
+                        aria-live="polite"
+                    >
+                        Aguardando leitura...
+                    </p>
 
                     <div class="bomba-info">
                         <div>
@@ -210,8 +220,8 @@
                             <input
                                 id="minimo"
                                 type="range"
-                                min="0"
-                                max="100"
+                                min="1"
+                                max="96"
                                 value="30"
                                 aria-label="Nível mínimo"
                             />
@@ -231,7 +241,7 @@
                             <input
                                 id="maximo"
                                 type="range"
-                                min="0"
+                                min="2"
                                 max="97"
                                 value="90"
                                 aria-label="Nível máximo"
@@ -239,9 +249,23 @@
                         </div>
                     </div>
 
-                    <button id="salvarLimites" class="btn salvar">
-                        Salvar limites
-                    </button>
+                    <div class="botoes-limites">
+                        <button
+                            id="salvarLimites"
+                            class="btn salvar"
+                            type="button"
+                        >
+                            Salvar limites
+                        </button>
+                        <button
+                            id="cancelarLimites"
+                            class="btn cancelar"
+                            type="button"
+                            disabled
+                        >
+                            Cancelar edição
+                        </button>
+                    </div>
                 </article>
 
                 <article class="card">

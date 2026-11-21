@@ -1,19 +1,13 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
+const { randomUUID } = require("crypto");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-/* CONFIGURAÇÃO E PERSISTÊNCIA
- * estado.json armazena estado, medições, acionamentos e alertas.
- * Sua durabilidade depende do armazenamento do ambiente de execução;
- * discos efêmeros podem perder esse arquivo após reinicializações. */
-// Arquivo de persistência: guarda o estado do sistema E os históricos
-// (leituras, acionamentos da bomba, alertas). Sobrevive a reinícios do
-// processo dentro do mesmo container/disco. Em PaaS com filesystem
-// efêmero (ex.: Render Free tier), o arquivo é perdido em cada deploy
-// ou wake-up — comportamento aceito neste projeto.
+/* Persistência em estado.json: dados sujeitos à durabilidade do disco.
+ * Armazenamento efêmero é uma limitação conhecida e aceita neste projeto. */
 const ARQUIVO_ESTADO = path.join(__dirname, "estado.json");
 
 // Limita a quantidade de registros em memória e em estado.json.
@@ -25,6 +19,14 @@ const MAX_ALERTAS_MEMORIA = 200;
 // Watchdog: considera o ESP32 silencioso após 15 s sem POST.
 const TIMEOUT_ESP32_MS = 15000;
 const INTERVALO_WATCHDOG_MS = 5000;
+// Um comando não confirmado deixa de ser entregue após 10 segundos.
+const VALIDADE_COMANDO_MANUAL_MS = 10000;
+// Controla solicitações originadas da mesma página: um pedido antigo de
+// "ligar" não pode substituir um "desligar" enviado depois dela.
+// Clientes antigos sem esses campos continuam funcionando, porém sem a
+// garantia de ordenação entre requisições concorrentes.
+const MAX_CLIENTES_CONTROLE = 1024;
+const ultimasSequenciasControle = new Map();
 
 // Limite de segurança do backend, igual ao NIVEL_CORTE_SEGURANCA
 // definido no firmware.
@@ -48,13 +50,69 @@ function limitarTamanho(arr, max) {
   if (arr.length > max) arr.splice(0, arr.length - max);
 }
 
+// Requisições sem objeto JSON (inclusive arrays) não podem causar exceção
+// nem ser convertidas implicitamente em campos válidos.
+function obterCorpoJSON(req) {
+  return req.body && typeof req.body === "object" && !Array.isArray(req.body)
+    ? req.body
+    : {};
+}
+
+// A sequência é compartilhada entre /api/bomba e /api/modo para impedir que
+// uma requisição atrasada reverta uma intenção mais recente do mesmo painel.
+// Os registros são limitados para não crescer indefinidamente em memória.
+function verificarSequenciaControle(corpo) {
+  const id = corpo.clienteControleId;
+  const sequencia = corpo.sequenciaControle;
+  if (id === undefined && sequencia === undefined) return { legado: true };
+  if (
+    typeof id !== "string" ||
+    !/^[a-zA-Z0-9-]{1,100}$/.test(id) ||
+    !Number.isSafeInteger(sequencia) ||
+    sequencia < 1
+  ) {
+    return {
+      erro: "Identificação ou sequência de comando inválida.",
+      status: 400,
+    };
+  }
+  const anterior = ultimasSequenciasControle.get(id);
+  if (anterior !== undefined && sequencia <= anterior) {
+    return {
+      erro: "Comando antigo ignorado: há uma solicitação mais recente.",
+      status: 409,
+    };
+  }
+  return { id, sequencia };
+}
+
+function registrarSequenciaControle(ordem) {
+  if (!ordem.id) return; // Compatibilidade com chamadas antigas da API.
+  // Reinsere a chave no fim, permitindo remover as menos recentes.
+  ultimasSequenciasControle.delete(ordem.id);
+  ultimasSequenciasControle.set(ordem.id, ordem.sequencia);
+  if (ultimasSequenciasControle.size > MAX_CLIENTES_CONTROLE) {
+    ultimasSequenciasControle.delete(
+      ultimasSequenciasControle.keys().next().value,
+    );
+  }
+}
+
 /* ESTADO INICIAL E VARIÁVEIS COMPARTILHADAS */
 const estadoPadraoSistema = {
   nivel: 0,
   litros: 0,
   alturaCm: 0,
   capacidadeLitros: 0,
+  // bombaLigada preserva o último estado comunicado (para o histórico).
   bombaLigada: false,
+  // null = estado físico desconhecido, inclusive durante uma desconexão.
+  bombaConfirmada: null,
+  bombaDesejada: false,
+  comandoPendente: false,
+  esp32Online: false,
+  bloqueioManual: false,
+  ultimaMensagemDataHora: null,
   modo: "automatico",
   minimo: 30,
   maximo: 90,
@@ -70,20 +128,17 @@ let alertas = []; // histórico de ocorrências registradas
 let alertasAtivos = []; // condições não resolvidas
 let nivelCriticoAtivo = false;
 
-// Referência temporal do watchdog, iniciada na subida do servidor.
+// O heartbeat só é renovado depois da validação de um POST de telemetria.
+// Inicia no boot apenas para disparar o primeiro alerta se não houver conexão.
 let ultimaLeituraRecebida = Date.now();
-
-// Na primeira leitura após entrar em modo manual, o eco do ESP32 só
-// prevalece se o usuário ainda não enviou um comando de bomba.
-let modoRecemAlterado = false;
-let comandoManualDesdeTroca = false;
+// Não persistimos comandos: reiniciar o servidor nunca deve religar a bomba.
+let comandoManualPendente = null;
+let ultimaSessaoESP32 = null;
 
 /* RESTAURAÇÃO DO ESTADO
- * Suporta estado.json no formato atual, com a propriedade `sistema`, e
- * arquivos legados em que o objeto inteiro representa o estado.
- * A bomba volta a false no estado lógico do servidor. Se estava true
- * no arquivo, um evento sintético registra esse reset lógico; ele não
- * confirma a posição física do relé controlado pelo ESP32. */
+ * Suporta estado.json no formato atual e legados.
+ * Mantém a última leitura histórica, mas NÃO inventa um desligamento
+ * físico: a confirmação atual permanece null até a nova telemetria. */
 function carregarEstado() {
   try {
     if (!fs.existsSync(ARQUIVO_ESTADO)) {
@@ -96,22 +151,28 @@ function carregarEstado() {
     const novoSistema = salvo.sistema !== undefined ? salvo.sistema : salvo;
     sistema = { ...estadoPadraoSistema, ...novoSistema };
 
-    /* Normaliza dados persistidos de versões antigas: máximo até 97% e
-     * mínimo estritamente inferior ao máximo após o ajuste. */
-    if (sistema.maximo > LIMITE_SEGURANCA_MANUAL - 1) {
-      console.warn(
-        `maximo=${sistema.maximo} excede o limite de segurança; ` +
-          `ajustando para ${LIMITE_SEGURANCA_MANUAL - 1}.`,
-      );
-      sistema.maximo = LIMITE_SEGURANCA_MANUAL - 1;
-      if (sistema.minimo >= sistema.maximo) {
-        sistema.minimo = Math.max(0, sistema.maximo - 1);
-      }
-    }
+    /* Migra limites antigos: mínimo >= 1%, máximo <= 97% e mínimo
+     * estritamente menor que o máximo. Nunca restaura mínimo 0%. */
+    const maximoSalvo = Number(sistema.maximo);
+    const minimoSalvo = Number(sistema.minimo);
+    sistema.maximo =
+      Number.isFinite(maximoSalvo) && maximoSalvo > 1
+        ? Math.min(maximoSalvo, LIMITE_SEGURANCA_MANUAL - 1)
+        : estadoPadraoSistema.maximo;
+    sistema.minimo =
+      Number.isFinite(minimoSalvo) && minimoSalvo >= 1
+        ? Math.min(minimoSalvo, sistema.maximo - 1)
+        : 1;
 
-    /* Preserva o estado restaurado para decidir sobre o evento sintético. */
-    const bombaEstavaLigada = sistema.bombaLigada === true;
-    sistema.bombaLigada = false;
+    // A última leitura é histórica, não uma confirmação física presente.
+    sistema.bombaLigada = sistema.bombaLigada === true;
+    // O arquivo não prova o estado físico do relé após um reinício.
+    sistema.bombaConfirmada = null;
+    sistema.bombaDesejada = false;
+    sistema.comandoPendente = false;
+    sistema.esp32Online = false;
+    sistema.bloqueioManual = false;
+    sistema.ultimaMensagemDataHora = null;
 
     if (Array.isArray(salvo.historico)) {
       historico = salvo.historico;
@@ -130,18 +191,6 @@ function carregarEstado() {
       limitarTamanho(alertasAtivos, MAX_ALERTAS_MEMORIA);
     }
     nivelCriticoAtivo = alertasAtivos.some((a) => a.tipo === "nivel_critico");
-
-    /* Registra no histórico o desligamento lógico decorrente da restauração.
-     * O horário corresponde ao boot do backend, não a uma confirmação
-     * de que o relé físico foi desligado nesse instante. */
-    if (bombaEstavaLigada) {
-      historicoBomba.push({
-        estado: "desligada",
-        modo: sistema.modo,
-        dataHora: new Date().toISOString(),
-      });
-      limitarTamanho(historicoBomba, MAX_HISTORICO_BOMBA_MEMORIA);
-    }
 
     console.log(
       `Estado restaurado de ${ARQUIVO_ESTADO} ` +
@@ -176,18 +225,18 @@ function salvarEstadoAgora() {
 
 carregarEstado();
 
-/* Persiste imediatamente dados migrados, limites normalizados e
- * eventuais eventos sintéticos de desligamento. */
+// Salva os valores normalizados após a restauração.
 salvarEstadoAgora();
 
 /* ALTERAÇÕES DE ESTADO E ALERTAS */
 // Registra e persiste apenas transições efetivas do estado da bomba.
-function registrarAcionamento(novoEstado) {
+function registrarAcionamento(novoEstado, modoEfetivo) {
   if (sistema.bombaLigada !== novoEstado) {
     sistema.bombaLigada = novoEstado;
     historicoBomba.push({
       estado: novoEstado ? "ligada" : "desligada",
-      modo: sistema.modo,
+      // O modo é o reportado pelo ESP32; nunca inferido do servidor.
+      modo: modoEfetivo,
       dataHora: new Date().toISOString(),
     });
     limitarTamanho(historicoBomba, MAX_HISTORICO_BOMBA_MEMORIA);
@@ -208,8 +257,8 @@ function registrarAlerta(tipo, mensagem, nivel = null, ativo = false) {
   alertas.push(alerta);
   limitarTamanho(alertas, MAX_ALERTAS_MEMORIA);
 
-  // Separa o histórico de ocorrências das condições ainda não resolvidas.
-  if (ativo && !alertasAtivos.some((a) => a.tipo === tipo)) {
+  // A verificação inicial já descartou alertas ativos duplicados.
+  if (ativo) {
     alertasAtivos.push({ ...alerta });
     limitarTamanho(alertasAtivos, MAX_ALERTAS_MEMORIA);
   }
@@ -225,174 +274,241 @@ function resolverAlerta(tipo) {
 // O nível só é crítico abaixo do mínimo; ao voltar à faixa normal,
 // o alerta ativo é resolvido. O comparador < coincide com firmware e UI.
 function verificarNivelCritico() {
-  if (sistema.nivel < sistema.minimo) {
-    if (!nivelCriticoAtivo) {
-      registrarAlerta(
-        "nivel_critico",
-        "Nível de água crítico.",
-        sistema.nivel,
-        true,
-      );
-      nivelCriticoAtivo = true;
-    }
-  } else {
+  if (sistema.nivel >= sistema.minimo) {
     nivelCriticoAtivo = false;
     resolverAlerta("nivel_critico");
+    return;
+  }
+  if (nivelCriticoAtivo) return;
+  registrarAlerta(
+    "nivel_critico",
+    "Nível de água crítico.",
+    sistema.nivel,
+    true,
+  );
+  nivelCriticoAtivo = true;
+}
+
+/* COMANDOS MANUAIS E CONFIRMAÇÃO
+ * O backend guarda a intenção, mas somente o ESP32 confirma o estado físico.
+ * Um comando tem identificador único, expiração e confirmação por telemetria.
+ * Nunca se reenvia um comando antigo depois de reinício ou queda de comunicação. */
+function cancelarComandoManual() {
+  comandoManualPendente = null;
+  sistema.comandoPendente = false;
+  sistema.bombaDesejada = sistema.bombaConfirmada === true;
+}
+
+function expirarComandoManual() {
+  if (comandoManualPendente && Date.now() >= comandoManualPendente.expiraEm) {
+    cancelarComandoManual();
   }
 }
 
-/* API DE TELEMETRIA E COMANDOS
- * Um POST /api/nivel recebe a leitura e devolve o modo, os limites e o
- * estado de comando. A UI pode antecipar visualmente uma mudança antes
- * de o ESP32 receber e executar a resposta. */
-app.post("/api/nivel", (req, res) => {
-  // Reinicia o watchdog quando chega um POST à rota de telemetria.
+function criarComandoManual(ligar) {
+  comandoManualPendente = {
+    id: randomUUID(),
+    ligar,
+    expiraEm: Date.now() + VALIDADE_COMANDO_MANUAL_MS,
+  };
+  sistema.comandoPendente = true;
+  sistema.bombaDesejada = ligar;
+}
+
+function registrarHeartbeat(corpo) {
+  // Sessões mudam a cada reinicialização do ESP32; comandos antigos expiram
+  // imediatamente ao detectarmos um novo boot, mesmo dentro dos 10 segundos.
+  const sessao =
+    typeof corpo.sessaoESP32 === "string" &&
+    /^[a-fA-F0-9-]{1,64}$/.test(corpo.sessaoESP32)
+      ? corpo.sessaoESP32
+      : null;
+  if (sessao !== null) {
+    if (ultimaSessaoESP32 !== null && ultimaSessaoESP32 !== sessao) {
+      cancelarComandoManual();
+    }
+    ultimaSessaoESP32 = sessao;
+  }
+
+  const bloqueado = corpo.bloqueioManual === true;
+  // Na primeira indicação da trava, descarta comandos emitidos antes dela.
+  // Comandos NOVOS, criados depois da trava, continuam entregáveis.
+  if (bloqueado && !sistema.bloqueioManual) cancelarComandoManual();
+  sistema.bloqueioManual = bloqueado;
+
   ultimaLeituraRecebida = Date.now();
+  sistema.ultimaMensagemDataHora = new Date().toISOString();
+  sistema.esp32Online = true;
+  resolverAlerta("esp32_offline");
+}
 
-  const nivelBruto = req.body.nivel;
-  const litrosBruto = req.body.litros;
+function modoReportado(corpo) {
+  return corpo.modoESP32 === "manual" || corpo.modoESP32 === "automatico"
+    ? corpo.modoESP32
+    : null;
+}
 
-  // A convenção nivel=-1 informa falha no sensor; o backend registra
-  // o alerta e desliga o estado lógico da bomba.
-  if (nivelBruto !== undefined && Number(nivelBruto) === -1) {
+// Apenas o ESP32 confirma o estado do GPIO e o modo usado na transição.
+function registrarEcoDaBomba(corpo) {
+  const modoEfetivo = modoReportado(corpo);
+  registrarAcionamento(corpo.bombaLigada, modoEfetivo);
+  sistema.bombaConfirmada = corpo.bombaLigada;
+  expirarComandoManual();
+
+  if (
+    comandoManualPendente &&
+    corpo.comandoAplicadoId === comandoManualPendente.id
+  ) {
+    // Mesmo se a segurança local recusou o acionamento, a intenção antiga
+    // não deve ficar pendente e ser aplicada em outro ciclo.
+    cancelarComandoManual();
+  }
+  if (!comandoManualPendente) {
+    sistema.bombaDesejada = sistema.bombaConfirmada === true;
+  }
+}
+
+// Campos retornados ao firmware, inclusive quando o sensor falha.
+function configuracaoParaESP32() {
+  return {
+    modo: sistema.modo,
+    minimo: sistema.minimo,
+    maximo: sistema.maximo,
+    bombaLigada: sistema.bombaLigada,
+  };
+}
+
+/* Apenas telemetria válida atualiza o watchdog. A sessão identifica
+ * reinicializações, mas não autentica o dispositivo. */
+app.post("/api/nivel", (req, res) => {
+  const corpo = obterCorpoJSON(req);
+  const nivel = corpo.nivel;
+  const litros = corpo.litros;
+  const falhaSensor = nivel === -1;
+
+  // O ArduinoJson emite números JSON. Impedir coerções evita aceitar [] como
+  // zero, strings vazias como zero, true como um e outros tipos inesperados.
+  const nivelValido =
+    typeof nivel === "number" &&
+    Number.isFinite(nivel) &&
+    (falhaSensor || (nivel >= 0 && nivel <= 100));
+  const litrosValidos =
+    typeof litros === "number" && Number.isFinite(litros) && litros >= 0;
+  if (
+    !nivelValido ||
+    !litrosValidos ||
+    typeof corpo.bombaLigada !== "boolean" ||
+    (corpo.modoESP32 !== undefined &&
+      corpo.modoESP32 !== "manual" &&
+      corpo.modoESP32 !== "automatico") ||
+    (falhaSensor && corpo.bombaLigada !== false)
+  ) {
+    return res.status(400).json({
+      sucesso: false,
+      erro: "Leitura inválida do sensor.",
+      ...configuracaoParaESP32(),
+    });
+  }
+
+  registrarHeartbeat(corpo);
+  registrarEcoDaBomba(corpo);
+
+  if (falhaSensor) {
     sistema.sensorOK = false;
+    cancelarComandoManual();
     registrarAlerta("sensor_falha", "Falha na leitura do sensor.", null, true);
-
-    // Mantém o estado lógico da bomba desligado em caso de falha.
-    registrarAcionamento(false);
-
-    // Cancela a sincronização pendente do modo manual.
-    modoRecemAlterado = false;
-    comandoManualDesdeTroca = false;
-
     return res.status(200).json({
       sucesso: false,
       sensorOK: false,
       erro: "Falha na leitura do sensor.",
-      modo: sistema.modo,
-      minimo: sistema.minimo,
-      maximo: sistema.maximo,
-      bombaLigada: sistema.bombaLigada,
-    });
-  }
-
-  const nivel = Number(nivelBruto);
-  const litros = Number(litrosBruto);
-
-  // Valida presença, finitude e faixa de nível e volume; rejeita com 400.
-  if (
-    nivelBruto === undefined ||
-    nivelBruto === null ||
-    nivelBruto === "" ||
-    !Number.isFinite(nivel) ||
-    nivel < 0 ||
-    nivel > 100 ||
-    litrosBruto === undefined ||
-    litrosBruto === null ||
-    litrosBruto === "" ||
-    !Number.isFinite(litros) ||
-    litros < 0
-  ) {
-    sistema.sensorOK = false;
-    registrarAlerta(
-      "sensor_falha",
-      "Payload inválido recebido do sensor.",
-      null,
-      true,
-    );
-    registrarAcionamento(false);
-    modoRecemAlterado = false;
-    comandoManualDesdeTroca = false;
-
-    return res.status(400).json({
-      sucesso: false,
-      erro: "Leitura inválida do sensor.",
-      modo: sistema.modo,
-      minimo: sistema.minimo,
-      maximo: sistema.maximo,
-      bombaLigada: sistema.bombaLigada,
+      ...configuracaoParaESP32(),
+      comandoManual: null,
     });
   }
 
   sistema.sensorOK = true;
   resolverAlerta("sensor_falha");
-  resolverAlerta("esp32_offline");
   sistema.ultimaLeituraDataHora = new Date().toISOString();
   sistema.nivel = nivel;
   sistema.litros = litros;
 
-  // Altura e capacidade são campos opcionais: se ausentes, mantém os
-  // valores anteriores. O firmware deste relatório não os envia no POST.
-  const alturaBruta = Number(req.body.alturaCm);
-  if (Number.isFinite(alturaBruta) && alturaBruta >= 0) {
-    sistema.alturaCm = alturaBruta;
+  // Campos opcionais mantidos por compatibilidade: o firmware não os envia.
+  if (corpo.alturaCm !== undefined) {
+    const alturaBruta = Number(corpo.alturaCm);
+    if (Number.isFinite(alturaBruta) && alturaBruta >= 0)
+      sistema.alturaCm = alturaBruta;
   }
-  const capacidadeBruta = Number(req.body.capacidadeLitros);
-  if (Number.isFinite(capacidadeBruta) && capacidadeBruta > 0) {
-    sistema.capacidadeLitros = capacidadeBruta;
-  }
-
-  // Desliga o estado lógico da bomba em modo manual ao alcançar 98%.
-  // Fecha a janela de sincronização para ignorar o eco possivelmente
-  // desatualizado; o firmware também aplica o corte local.
-  if (
-    sistema.modo === "manual" &&
-    sistema.bombaLigada &&
-    sistema.nivel >= LIMITE_SEGURANCA_MANUAL
-  ) {
-    registrarAcionamento(false);
-    registrarAlerta(
-      "corte_seguranca",
-      `Bomba desligada automaticamente por segurança (nível ≥ ${LIMITE_SEGURANCA_MANUAL}%).`,
-      sistema.nivel,
-    );
-    modoRecemAlterado = false;
-    comandoManualDesdeTroca = true;
-  }
-
-  // Origem do estado da bomba: no automático, o ESP32 prevalece.
-  // No manual, o eco é aceito apenas na primeira leitura após a troca
-  // de modo, desde que não exista comando do usuário mais recente.
-  if (typeof req.body.bombaLigada === "boolean") {
-    if (sistema.modo === "automatico") {
-      registrarAcionamento(req.body.bombaLigada);
-    } else if (modoRecemAlterado && !comandoManualDesdeTroca) {
-      registrarAcionamento(req.body.bombaLigada);
+  if (corpo.capacidadeLitros !== undefined) {
+    const capacidadeBruta = Number(corpo.capacidadeLitros);
+    if (Number.isFinite(capacidadeBruta) && capacidadeBruta > 0) {
+      sistema.capacidadeLitros = capacidadeBruta;
     }
   }
 
-  // Consome a janela de sincronização após esta leitura.
-  modoRecemAlterado = false;
-  comandoManualDesdeTroca = false;
+  // O modo manual respeita o máximo configurável, além do corte fixo de 98%.
+  // Esta checagem vem DEPOIS do eco para não aceitar um comando velho
+  // quando a telemetria chega simultaneamente ao limite.
+  if (sistema.modo === "manual" && sistema.nivel >= sistema.maximo) {
+    if (comandoManualPendente?.ligar === true) cancelarComandoManual();
+    if (sistema.bombaConfirmada === true) {
+      if (!comandoManualPendente || comandoManualPendente.ligar !== false) {
+        criarComandoManual(false);
+      }
+      registrarAlerta(
+        "corte_seguranca",
+        `Limite máximo atingido em modo manual (${sistema.nivel}%): desligamento solicitado.`,
+        sistema.nivel,
+        true,
+      );
+    } else {
+      resolverAlerta("corte_seguranca");
+    }
+  } else {
+    resolverAlerta("corte_seguranca");
+  }
 
-  // Guarda cada medição em memória. A gravação em disco acontece
-  // periodicamente ou quando há outras mudanças persistidas.
+  if (sistema.modo === "automatico" && !comandoManualPendente) {
+    sistema.bombaDesejada = sistema.bombaConfirmada === true;
+  }
+
   historico.push({
     nivel: sistema.nivel,
     litros: sistema.litros,
     bombaLigada: sistema.bombaLigada,
-    modo: sistema.modo,
+    modo: modoReportado(corpo),
     dataHora: new Date().toISOString(),
   });
   limitarTamanho(historico, MAX_HISTORICO_MEMORIA);
-
   verificarNivelCritico();
 
-  // Retorna os comandos na resposta ao próprio POST de telemetria.
+  expirarComandoManual();
+  const podeEnviar =
+    sistema.modo === "manual" &&
+    ultimaSessaoESP32 !== null &&
+    corpo.sessaoESP32 === ultimaSessaoESP32;
+  // Só o comando solicitado é transmitido; bombaLigada agora é TELEMETRIA.
+  const comandoManual =
+    podeEnviar && comandoManualPendente
+      ? { id: comandoManualPendente.id, ligar: comandoManualPendente.ligar }
+      : null;
+
   res.json({
     sucesso: true,
-    modo: sistema.modo,
-    minimo: sistema.minimo,
-    maximo: sistema.maximo,
-    bombaLigada: sistema.bombaLigada,
+    ...configuracaoParaESP32(),
+    comandoManual,
   });
 });
 
 /* API DE CONSULTA E COMANDOS */
 // Consulta de comando sem alterações de estado.
 app.get("/api/comando", (req, res) => {
+  expirarComandoManual();
+  verificarWatchdog();
   res.json({
     bombaLigada: sistema.bombaLigada,
+    bombaConfirmada: sistema.bombaConfirmada,
+    bombaDesejada: sistema.bombaDesejada,
+    comandoPendente: sistema.comandoPendente,
     modo: sistema.modo,
     minimo: sistema.minimo,
     maximo: sistema.maximo,
@@ -400,6 +516,8 @@ app.get("/api/comando", (req, res) => {
 });
 
 app.get("/api/status", (req, res) => {
+  expirarComandoManual();
+  verificarWatchdog();
   res.json(sistema);
 });
 
@@ -420,13 +538,12 @@ app.get("/api/alertas/ativos", (req, res) => {
   res.json(alertasAtivos); // condições não resolvidas
 });
 
-/* ESTATÍSTICAS DO HISTÓRICO RETIDO EM MEMÓRIA
- * Campos numéricos nulos indicam ausência de amostras válidas.
- * O consumo é uma estimativa obtida somando quedas de volume. */
-// Calculadas sob demanda sobre o histórico em memória (até 5000 amostras
-// ≈ 1h20). Quando não há amostras, os campos numéricos vêm como null para
-// que a UI exiba "--" em vez de 0 (0% seria um valor falso).
+/* Estatísticas do histórico retido: null significa ausência de dados.
+ * O consumo é a soma das reduções de volume entre leituras válidas. */
 app.get("/api/estatisticas", (req, res) => {
+  const acionamentos = historicoBomba.filter(
+    (e) => e.estado === "ligada",
+  ).length;
   const amostrasValidas = historico.filter((h) => {
     const n = Number(h.nivel);
     const l = Number(h.litros);
@@ -441,7 +558,7 @@ app.get("/api/estatisticas", (req, res) => {
       nivelMaximo: null,
       nivelMinimo: null,
       consumoEstimado: null,
-      acionamentos: historicoBomba.filter((e) => e.estado === "ligada").length,
+      acionamentos,
       amostras: 0,
     });
   }
@@ -461,10 +578,6 @@ app.get("/api/estatisticas", (req, res) => {
     if (prev > curr) consumo += prev - curr;
   }
 
-  const acionamentos = historicoBomba.filter(
-    (e) => e.estado === "ligada",
-  ).length;
-
   res.json({
     nivelMedio: Number(nivelMedio.toFixed(1)),
     nivelMaximo: Number(nivelMax.toFixed(1)),
@@ -476,42 +589,62 @@ app.get("/api/estatisticas", (req, res) => {
 });
 
 app.post("/api/bomba", (req, res) => {
+  const corpo = obterCorpoJSON(req);
   if (sistema.modo !== "manual") {
     return res.status(400).json({
       erro: "Controle manual indisponível.",
     });
   }
 
-  if (typeof req.body.ligar !== "boolean") {
+  if (typeof corpo.ligar !== "boolean") {
     return res.status(400).json({
       erro: "Estado da bomba inválido.",
     });
   }
 
+  const ordem = verificarSequenciaControle(corpo);
+  if (ordem.erro) return res.status(ordem.status).json({ erro: ordem.erro });
+
   // Bloqueia o comando manual de ligar quando o nível atingiu o
   // limite de segurança, independentemente do máximo configurado.
-  if (req.body.ligar && sistema.nivel >= LIMITE_SEGURANCA_MANUAL) {
+  if (corpo.ligar && sistema.nivel >= LIMITE_SEGURANCA_MANUAL) {
     return res.status(400).json({
       erro: `Bomba não pode ser ligada. Limite de segurança atingido (≥ ${LIMITE_SEGURANCA_MANUAL}%).`,
     });
   }
 
-  if (req.body.ligar && sistema.nivel >= sistema.maximo) {
+  if (corpo.ligar && sistema.nivel >= sistema.maximo) {
     return res.status(400).json({
       erro: "Limite máximo atingido.",
     });
   }
 
-  registrarAcionamento(req.body.ligar);
+  expirarComandoManual();
+  verificarWatchdog();
+  // O comando de ligar exige um ESP32 vivo, sensor íntegro e uma sessão
+  // identificada. O desligamento permanece permitido mesmo se estiver offline.
+  if (
+    corpo.ligar &&
+    (!sistema.esp32Online || !sistema.sensorOK || ultimaSessaoESP32 === null)
+  ) {
+    return res.status(409).json({
+      erro: "ESP32 sem comunicação válida ou sensor indisponível.",
+    });
+  }
 
-  // Prioriza o comando do usuário sobre o eco de sincronização.
-  comandoManualDesdeTroca = true;
-
+  // Somente pedidos aceitos avançam a sequência. Uma requisição atrasada
+  // de ligar não pode se sobrepor a um desligamento mais recente.
+  registrarSequenciaControle(ordem);
+  // Esta requisição NÃO modifica o estado confirmado nem o histórico.
+  // Eles serão atualizados no próximo POST com o eco do ESP32.
+  criarComandoManual(corpo.ligar);
+  salvarEstadoAgora();
   res.json(sistema);
 });
 
 app.post("/api/modo", (req, res) => {
-  const modo = req.body.modo;
+  const corpo = obterCorpoJSON(req);
+  const modo = corpo.modo;
 
   if (modo !== "manual" && modo !== "automatico") {
     return res.status(400).json({
@@ -519,30 +652,33 @@ app.post("/api/modo", (req, res) => {
     });
   }
 
-  sistema.modo = modo;
-  salvarEstadoAgora();
+  const ordem = verificarSequenciaControle(corpo);
+  if (ordem.erro) return res.status(ordem.status).json({ erro: ordem.erro });
+  registrarSequenciaControle(ordem);
 
-  // Abre uma janela de uma leitura ao entrar no modo manual.
-  if (modo === "manual") {
-    modoRecemAlterado = true;
-    comandoManualDesdeTroca = false;
-  } else {
-    modoRecemAlterado = false;
-    comandoManualDesdeTroca = false;
+  if (sistema.modo !== modo) {
+    sistema.modo = modo;
+    cancelarComandoManual();
+    // Ao entrar em manual, o firmware interrompe a bomba até novo comando.
+    if (modo === "manual") sistema.bombaDesejada = false;
+    salvarEstadoAgora();
   }
 
   res.json(sistema);
 });
 
 app.post("/api/limites", (req, res) => {
-  const minimo = Number(req.body.minimo);
-  const maximo = Number(req.body.maximo);
+  const corpo = obterCorpoJSON(req);
+  const minimo = corpo.minimo;
+  const maximo = corpo.maximo;
 
-  // Exige números finitos, mínimo não negativo e mínimo < máximo.
+  // Limites precisam ser números JSON reais: mínimo >= 1%, mínimo < máximo.
   if (
+    typeof minimo !== "number" ||
     !Number.isFinite(minimo) ||
+    typeof maximo !== "number" ||
     !Number.isFinite(maximo) ||
-    minimo < 0 ||
+    minimo < 1 ||
     minimo >= maximo
   ) {
     return res.status(400).json({
@@ -560,6 +696,11 @@ app.post("/api/limites", (req, res) => {
 
   sistema.minimo = minimo;
   sistema.maximo = maximo;
+  // Um comando pendente de ligar deixa de ser válido se o novo máximo
+  // passou a proibir essa operação no nível já medido.
+  if (comandoManualPendente?.ligar === true && sistema.nivel >= maximo) {
+    cancelarComandoManual();
+  }
   salvarEstadoAgora();
 
   verificarNivelCritico();
@@ -568,31 +709,29 @@ app.post("/api/limites", (req, res) => {
 });
 
 /* WATCHDOG DE COMUNICAÇÃO E SALVAMENTO PROGRAMADO */
-// Sem POST durante TIMEOUT_ESP32_MS, sinaliza sensor indisponível
-// e registra alerta de ESP32 offline.
-setInterval(() => {
+// Falha de comunicação é independente de falha do sensor. Não inventamos
+// um desligamento físico quando só perdemos a comunicação com o ESP32.
+function verificarWatchdog() {
   const silencioMs = Date.now() - ultimaLeituraRecebida;
   if (silencioMs <= TIMEOUT_ESP32_MS) return;
-  if (sistema.sensorOK === false) return; // já sinalizado, evita registros repetidos
-
-  console.log(
-    `ESP32 silencioso por ${Math.round(silencioMs / 1000)}s — marcando offline.`,
-  );
-  sistema.sensorOK = false;
+  const estavaOnline = sistema.esp32Online;
+  sistema.esp32Online = false;
+  sistema.bombaConfirmada = null;
+  sistema.bombaDesejada = false;
+  if (estavaOnline) {
+    cancelarComandoManual();
+  }
   registrarAlerta(
     "esp32_offline",
-    `ESP32 sem comunicação há mais de ${Math.round(
-      TIMEOUT_ESP32_MS / 1000,
-    )} segundos.`,
+    `ESP32 sem comunicação há mais de ${Math.round(TIMEOUT_ESP32_MS / 1000)} segundos.`,
     null,
     true,
   );
+}
 
-  // Em modo manual, também registra a bomba como desligada no backend.
-  // Sem comunicação, não há confirmação imediata do relé físico.
-  if (sistema.modo === "manual" && sistema.bombaLigada) {
-    registrarAcionamento(false);
-  }
+setInterval(() => {
+  expirarComandoManual();
+  verificarWatchdog();
 }, INTERVALO_WATCHDOG_MS);
 
 // Salva as leituras acumuladas a cada 60 s e durante o encerramento.

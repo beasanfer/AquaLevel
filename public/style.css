@@ -53,7 +53,7 @@ body {
     overflow-x: auto;
 }
 
-.menu a {
+.menu .nav-link {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -65,9 +65,18 @@ body {
     font-size: 14px;
     white-space: nowrap;
     transition: background 0.2s;
+    background: transparent;
+    border: 0;
+    font-family: inherit;
+    text-align: left;
 }
 
-.menu a img {
+.menu .nav-link:focus-visible {
+    outline: 3px solid #ffd600;
+    outline-offset: -3px;
+}
+
+.menu .nav-link img {
     width: 20px;
     height: 20px;
     object-fit: contain;
@@ -75,25 +84,25 @@ body {
 }
 
 /* Tamanhos específicos para respeitar a proporção dos ícones PNG. */
-.menu a[data-page="dashboard"] img,
-.menu a[data-page="historico"] img,
-.menu a[data-page="alertas-page"] img {
+.menu .nav-link[data-page="dashboard"] img,
+.menu .nav-link[data-page="historico"] img,
+.menu .nav-link[data-page="alertas-page"] img {
     width: 30px;
     height: 30px;
 }
 
-.menu a[data-page="relatorios"] img,
-.menu a[data-page="sobre"] img {
+.menu .nav-link[data-page="relatorios"] img,
+.menu .nav-link[data-page="sobre"] img {
     width: 25px;
     height: 25px;
 }
 
-.menu a[data-page="configuracoes"] {
+.menu .nav-link[data-page="configuracoes"] {
     padding-top: 16px;
     padding-bottom: 16px;
 }
 
-.menu a:hover,
+.menu .nav-link:hover,
 .menu .active {
     background: #0877e8;
 }
@@ -450,6 +459,20 @@ button {
     margin-top: 20px;
 }
 
+/* A edição preserva os valores escolhidos até Salvar ou Cancelar. */
+.botoes-limites {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+.botoes-limites .btn {
+    margin: 0;
+    flex: 1;
+}
+.cancelar {
+    background: #59677a;
+}
+
 /* CONTROLES DE LIMITE */
 
 .limits {
@@ -646,18 +669,18 @@ body.alto-contraste .topbar {
     border-bottom: 2px solid #fff;
 }
 
-body.alto-contraste .menu a {
+body.alto-contraste .menu .nav-link {
     color: #fff;
 }
 
-body.alto-contraste .menu a:hover,
+body.alto-contraste .menu .nav-link:hover,
 body.alto-contraste .menu .active {
     background: #fff;
     color: #000;
 }
 
 /* Inverte a cor dos ícones ativos para manter a visibilidade. */
-body.alto-contraste .menu a:hover img,
+body.alto-contraste .menu .nav-link:hover img,
 body.alto-contraste .menu .active img {
     filter: invert(1);
 }
@@ -669,6 +692,43 @@ body.alto-contraste .tanque {
     color: #fff;
     border-color: #fff;
     box-shadow: none;
+}
+
+/* Destaca o modo selecionado sem perder o contraste do texto. */
+body.alto-contraste .mode.active-mode {
+    background: #00ffff;
+    color: #000;
+    border-color: #00ffff;
+}
+
+/* As ações do painel usam a mesma paleta preto/branco/ciano do contraste. */
+body.alto-contraste .controle-card .btn,
+body.alto-contraste .botoes-limites .btn {
+    background: #000;
+    color: #fff;
+    border: 2px solid #fff;
+}
+
+body.alto-contraste .controle-card .ligar,
+body.alto-contraste .botoes-limites .salvar {
+    background: #00ffff;
+    color: #000;
+    border-color: #00ffff;
+}
+
+body.alto-contraste .controle-card .desligar {
+    background: #fff;
+    color: #000;
+    border-color: #fff;
+}
+
+/* Desativados continuam legíveis sem parecer disponíveis para clique. */
+body.alto-contraste .controle-card .btn:disabled,
+body.alto-contraste .botoes-limites .btn:disabled {
+    background: #161616;
+    color: #bdbdbd;
+    border-color: #a6a6a6;
+    opacity: 1;
 }
 
 body.alto-contraste header p,
@@ -749,7 +809,7 @@ body.alto-contraste .agua {
 
 /* Realce de foco para navegação por teclado. */
 body.alto-contraste button:focus-visible,
-body.alto-contraste a:focus-visible,
+body.alto-contraste .nav-link:focus-visible,
 body.alto-contraste input:focus-visible {
     outline: 3px solid #00ffff;
     outline-offset: 3px;
@@ -852,7 +912,7 @@ body.alto-contraste input:focus-visible {
         gap: 4px;
     }
 
-    .menu a {
+    .menu .nav-link {
         padding: 9px 10px;
         font-size: 13px;
     }
@@ -876,6 +936,10 @@ body.alto-contraste input:focus-visible {
     }
 
     .details {
+        flex-direction: column;
+    }
+
+    .botoes-limites {
         flex-direction: column;
     }
 }
