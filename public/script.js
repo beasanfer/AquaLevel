@@ -109,25 +109,19 @@ function aplicarAcessibilidade() {
 
 diminuirFonte.addEventListener("click", () => {
   tamanhoFonte = Math.max(85, tamanhoFonte - 10);
-
   localStorage.setItem("aqualevelFonte", tamanhoFonte);
-
   aplicarAcessibilidade();
 });
 
 aumentarFonte.addEventListener("click", () => {
   tamanhoFonte = Math.min(130, tamanhoFonte + 10);
-
   localStorage.setItem("aqualevelFonte", tamanhoFonte);
-
   aplicarAcessibilidade();
 });
 
 alternarContraste.addEventListener("click", () => {
   contrasteAtivo = !contrasteAtivo;
-
   localStorage.setItem("aqualevelContraste", String(contrasteAtivo));
-
   aplicarAcessibilidade();
 });
 
@@ -161,21 +155,17 @@ navLinks.forEach((link) => {
     if (pageId === "historico") {
       buscarHistorico();
     }
-
     if (pageId === "alertas-page") {
       buscarAlertas();
     }
-
     if (pageId === "configuracoes") {
       buscarDados();
     }
-
     if (pageId === "dashboard") {
       atualizarGrafico();
       buscarUltimosEventos();
       buscarEstatisticas();
     }
-
     if (pageId === "relatorios") {
       buscarEstatisticas();
     }
@@ -201,13 +191,16 @@ const INDICADORES_CONEXAO = {
 
 function atualizarIndicadorConexao(estado) {
   const wifi = document.getElementById("wifiStatus");
+
   if (!wifi) return;
+
   const indicador = Object.hasOwn(INDICADORES_CONEXAO, estado)
     ? INDICADORES_CONEXAO[estado]
     : INDICADORES_CONEXAO.servidor_offline;
   const [texto, cor, detalhe] = indicador;
   wifi.textContent = texto;
   wifi.style.color = cor;
+
   if (wifi.nextElementSibling) wifi.nextElementSibling.textContent = detalhe;
 }
 
@@ -294,11 +287,9 @@ function atualizarModo() {
   if (minimoConfiguracao) {
     minimoConfiguracao.textContent = minimo + "%";
   }
-
   if (maximoConfiguracao) {
     maximoConfiguracao.textContent = maximo + "%";
   }
-
   if (modoConfiguracao) {
     modoConfiguracao.textContent = modo === "automatico" ? "Automático" : "Manual";
   }
@@ -314,7 +305,6 @@ function atualizarLimitesEControles() {
   if (bandaValue) {
     bandaValue.textContent = Math.round(banda);
   }
-
   if (bandaConfiguracao) {
     bandaConfiguracao.textContent = Math.round(banda) + "%";
   }
@@ -335,6 +325,7 @@ function atualizarLimitesEControles() {
     alteracaoModoEmAndamento || ligamentoEmAndamento || desligamentoEmAndamento;
   btnAutomatico.disabled = controlesModoBloqueados;
   btnManual.disabled = controlesModoBloqueados;
+
   ligarBomba.disabled = modo !== "manual" || !esp32Online || !sensorOK || controlesModoBloqueados;
   // Prioridade de segurança: desligar fica disponível enquanto um pedido
   // anterior de ligar ainda aguarda resposta. Não permite OFF duplicado.
@@ -382,6 +373,7 @@ async function buscarEstatisticas() {
 
     const set = (id, valor) => {
       const el = document.getElementById(id);
+
       if (el) el.textContent = valor;
     };
 
@@ -395,6 +387,7 @@ async function buscarEstatisticas() {
       reportNivelMinimo: formatarPercentual(stats.nivelMinimo),
       reportAcionamentos: formatarNumero(stats.acionamentos),
     };
+
     for (const [id, valor] of Object.entries(indicadores)) set(id, valor);
   } catch (erro) {
     console.error("Erro ao carregar estatísticas:", erro);
@@ -406,6 +399,7 @@ function aplicarEstadoDaBomba(dados) {
   bombaConfirmada = typeof dados.bombaConfirmada === "boolean" ? dados.bombaConfirmada : null;
   bombaDesejada = dados.bombaDesejada === true;
   comandoPendente = dados.comandoPendente === true;
+
   if (typeof dados.esp32Online === "boolean") esp32Online = dados.esp32Online;
   if (typeof dados.sensorOK === "boolean") sensorOK = dados.sensorOK;
 }
@@ -420,10 +414,7 @@ const clienteControleId = `${Date.now().toString(36)}-${Math.random().toString(3
 let sequenciaControle = 0;
 
 function proximaOrdemControle() {
-  return {
-    clienteControleId,
-    sequenciaControle: ++sequenciaControle,
-  };
+  return { clienteControleId, sequenciaControle: ++sequenciaControle };
 }
 
 // Um timeout libera os controles quando a rede não responde. Abort não
@@ -432,6 +423,7 @@ function proximaOrdemControle() {
 async function requisitarJSON(url, opcoes, timeoutMs = 15000) {
   const controlador = typeof AbortController === "function" ? new AbortController() : null;
   const opcoesFinais = controlador ? { ...(opcoes || {}), signal: controlador.signal } : opcoes;
+
   const temporizador =
     controlador && typeof setTimeout === "function"
       ? setTimeout(() => controlador.abort(), timeoutMs)
@@ -439,6 +431,7 @@ async function requisitarJSON(url, opcoes, timeoutMs = 15000) {
   try {
     const resposta = await fetch(url, opcoesFinais);
     const dados = await resposta.json();
+
     return { resposta, dados };
   } finally {
     if (temporizador !== null) clearTimeout(temporizador);
@@ -466,6 +459,7 @@ async function solicitarBomba(ligar) {
     alert("Não é possível ligar: ESP32 offline ou sensor indisponível.");
     return;
   }
+
   if (ligar && (ligamentoEmAndamento || desligamentoEmAndamento)) return;
   if (!ligar && desligamentoEmAndamento) return;
 
@@ -473,17 +467,21 @@ async function solicitarBomba(ligar) {
   // requisições chegarem invertidas, o backend ignora o LIGAR antigo.
   if (ligar) ligamentoEmAndamento = true;
   else desligamentoEmAndamento = true;
+
   const ordem = proximaOrdemControle();
+
   revisaoEstadoLocal++;
   atualizarDashboard();
   try {
     const { resposta, dados } = await requisitarJSON("/api/bomba", opcoesPOST({ ligar, ...ordem }));
     // Respostas antigas nunca reescrevem a última intenção do usuário.
     if (ordem.sequenciaControle !== sequenciaControle) return;
+
     if (!resposta.ok) {
       alert(dados.erro || `Não foi possível solicitar ${ligar ? "ligar" : "desligar"} a bomba.`);
       return;
     }
+
     revisaoEstadoLocal++;
     aplicarEstadoDaBomba(dados);
     atualizarDashboard();
@@ -498,6 +496,7 @@ async function solicitarBomba(ligar) {
   } finally {
     if (ligar) ligamentoEmAndamento = false;
     else desligamentoEmAndamento = false;
+
     atualizarDashboard();
   }
 }
@@ -520,10 +519,12 @@ async function solicitarModo(novoModo) {
       "/api/modo",
       opcoesPOST({ modo: novoModo, ...ordem }),
     );
+
     if (!resposta.ok) {
       alert(dados.erro || "Não foi possível alterar o modo.");
       return;
     }
+
     revisaoEstadoLocal++;
     modo = dados.modo;
     aplicarEstadoDaBomba(dados);
@@ -533,6 +534,7 @@ async function solicitarModo(novoModo) {
     alert(
       "Não foi possível confirmar a mudança de modo. O servidor pode ter recebido a solicitação. Verifique o modo atual antes de tentar novamente.",
     );
+
     void buscarDados();
   } finally {
     alteracaoModoEmAndamento = false;
@@ -551,15 +553,15 @@ let limitesRascunho = { minimo, maximo };
 
 function atualizarRascunhoLimites() {
   limitesEmEdicao = true;
-  limitesRascunho = {
-    minimo: Number(inputMin.value),
-    maximo: Number(inputMax.value),
-  };
+
+  limitesRascunho = { minimo: Number(inputMin.value), maximo: Number(inputMax.value) };
+
   minValue.textContent = limitesRascunho.minimo;
   maxValue.textContent = limitesRascunho.maximo;
-  if (bandaValue) {
+
+  if (bandaValue)
     bandaValue.textContent = Math.max(0, limitesRascunho.maximo - limitesRascunho.minimo);
-  }
+
   cancelarLimites.disabled = false;
 }
 
@@ -579,6 +581,7 @@ cancelarLimites.addEventListener("click", encerrarEdicaoLimites);
 
 salvarLimites.addEventListener("click", async () => {
   if (salvamentoLimitesEmAndamento) return;
+
   const novoMinimo = limitesEmEdicao ? limitesRascunho.minimo : minimo;
   const novoMaximo = limitesEmEdicao ? limitesRascunho.maximo : maximo;
 
