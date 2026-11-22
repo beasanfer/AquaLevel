@@ -8,15 +8,17 @@
         <link rel="stylesheet" href="style.css" />
 
         <!-- Chart.js é entregue por /vendor/chartjs, rota estática do backend.
-             Não é necessário carregar a biblioteca por CDN. -->
+      Não é necessário carregar a biblioteca por CDN. -->
         <script src="/vendor/chartjs/chart.umd.min.js"></script>
     </head>
 
     <body>
         <!-- Navegação SPA: todas as páginas main.page permanecem no DOM.
-             script.js alterna a classe active-page usando o atributo data-page. -->
+      script.js alterna a classe active-page usando o atributo data-page. -->
 
-        <!-- BARRA SUPERIOR: navegação, acessibilidade e conexão -->
+        <!-- =================================================================
+         01. BARRA SUPERIOR E NAVEGAÇÃO
+         ================================================================= -->
         <nav class="topbar">
             <div class="brand">
                 <h2>AquaLevel</h2>
@@ -103,7 +105,9 @@
             </div>
         </nav>
 
-        <!-- DASHBOARD: monitoramento e comandos -->
+        <!-- =================================================================
+         02. DASHBOARD
+         ================================================================= -->
         <main id="dashboard" class="page active-page">
             <header>
                 <div>
@@ -318,7 +322,9 @@
             </section>
         </main>
 
-        <!-- HISTÓRICO DE MEDIÇÕES -->
+        <!-- =================================================================
+         03. HISTÓRICO DE MEDIÇÕES
+         ================================================================= -->
         <main id="historico" class="page">
             <header>
                 <div>
@@ -356,7 +362,9 @@
             </section>
         </main>
 
-        <!-- ALERTAS ATIVOS E HISTÓRICO DE OCORRÊNCIAS -->
+        <!-- =================================================================
+         04. ALERTAS
+         ================================================================= -->
         <main id="alertas-page" class="page">
             <header>
                 <div>
@@ -376,7 +384,9 @@
             </section>
         </main>
 
-        <!-- CONFIGURAÇÕES: leitura dos parâmetros em uso -->
+        <!-- =================================================================
+         05. CONFIGURAÇÕES
+         ================================================================= -->
         <main id="configuracoes" class="page">
             <header>
                 <div>
@@ -433,7 +443,9 @@
             </section>
         </main>
 
-        <!-- RELATÓRIOS: estatísticas calculadas pelo backend -->
+        <!-- =================================================================
+         06. RELATÓRIOS
+         ================================================================= -->
         <main id="relatorios" class="page">
             <header>
                 <div>
@@ -469,7 +481,9 @@
             </section>
         </main>
 
-        <!-- SOBRE O PROJETO -->
+        <!-- =================================================================
+         07. SOBRE O PROJETO
+         ================================================================= -->
         <main id="sobre" class="page">
             <header>
                 <div>

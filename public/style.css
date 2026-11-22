@@ -1,4 +1,12 @@
-/* BASE: reset de espaçamento e tipografia. */
+/*
+ * AquaLevel | Estilos da interface
+ *
+ * Estrutura visual, estados da aplicação, acessibilidade e responsividade.
+ */
+
+/* ====================================================================
+ * 01. BASE: RESET E TIPOGRAFIA
+ * ==================================================================== */
 
 * {
     box-sizing: border-box;
@@ -16,7 +24,9 @@ body {
     color: #14213d;
 }
 
-/* BARRA SUPERIOR E MENU */
+/* ====================================================================
+ * 02. BARRA SUPERIOR E MENU
+ * ==================================================================== */
 
 .topbar {
     min-height: 82px;
@@ -43,7 +53,7 @@ body {
 }
 
 /* Rolagem horizontal evita que o menu expulse os controles vizinhos.
- * min-width: 0 permite que o item flex encolha conforme a tela. */
+* min-width: 0 permite que o item flex encolha conforme a tela. */
 .menu {
     display: flex;
     align-items: center;
@@ -107,7 +117,9 @@ body {
     background: #0877e8;
 }
 
-/* CONTROLES DE ACESSIBILIDADE */
+/* ====================================================================
+ * 03. CONTROLES DE ACESSIBILIDADE
+ * ==================================================================== */
 
 .accessibility {
     display: flex;
@@ -144,7 +156,9 @@ body {
     white-space: nowrap;
 }
 
-/* STATUS DE CONEXÃO */
+/* ====================================================================
+ * 04. STATUS DE CONEXÃO
+ * ==================================================================== */
 
 .connection {
     min-width: 120px;
@@ -173,14 +187,18 @@ body {
     display: block;
 }
 
-/* ÁREA PRINCIPAL */
+/* ====================================================================
+ * 05. ÁREA PRINCIPAL
+ * ==================================================================== */
 
 main {
     width: 100%;
     padding: 20px;
 }
 
-/* CABEÇALHOS DAS PÁGINAS */
+/* ====================================================================
+ * 06. CABEÇALHOS DAS PÁGINAS
+ * ==================================================================== */
 
 header {
     display: flex;
@@ -197,7 +215,9 @@ header p {
     color: #68758b;
 }
 
-/* BANNER DE FALHA DO SENSOR */
+/* ====================================================================
+ * 07. BANNER DE FALHA DO SENSOR
+ * ==================================================================== */
 /* A classe hidden remove o banner do fluxo da página. */
 
 .sensor-banner {
@@ -230,7 +250,9 @@ header p {
     font-size: 15px;
 }
 
-/* GRIDS DO DASHBOARD E DAS PÁGINAS */
+/* ====================================================================
+ * 08. GRIDS DO DASHBOARD E DAS PÁGINAS
+ * ==================================================================== */
 /* Os grids compõem os cartões; media queries adaptam as colunas. */
 
 .grid-top {
@@ -276,7 +298,9 @@ header p {
     grid-template-columns: 1fr;
 }
 
-/* MEDIDOR DE NÍVEL */
+/* ====================================================================
+ * 09. MEDIDOR DE NÍVEL
+ * ==================================================================== */
 
 .nivel-content {
     display: flex;
@@ -304,9 +328,11 @@ header p {
     color: #29a45d;
 }
 
-/* REPRESENTAÇÃO DO TANQUE */
+/* ====================================================================
+ * 10. REPRESENTAÇÃO DO TANQUE
+ * ==================================================================== */
 /* script.js atualiza a altura de .agua a cada nível recebido.
- * A transição suaviza a subida ou descida da coluna de água. */
+* A transição suaviza a subida ou descida da coluna de água. */
 
 .tanque {
     width: 150px;
@@ -328,7 +354,9 @@ header p {
     transition: height 0.5s;
 }
 
-/* DETALHES DA MEDIÇÃO */
+/* ====================================================================
+ * 11. DETALHES DA MEDIÇÃO
+ * ==================================================================== */
 
 .details {
     display: flex;
@@ -345,7 +373,9 @@ header p {
     font-size: 13px;
 }
 
-/* CARTÃO DA BOMBA */
+/* ====================================================================
+ * 12. CARTÃO DA BOMBA
+ * ==================================================================== */
 
 .bomba-card {
     text-align: center;
@@ -473,7 +503,9 @@ button {
     background: #59677a;
 }
 
-/* CONTROLES DE LIMITE */
+/* ====================================================================
+ * 13. CONTROLES DE LIMITE
+ * ==================================================================== */
 
 .limits {
     display: flex;
@@ -492,7 +524,9 @@ button {
     margin-top: 10px;
 }
 
-/* ALERTAS E NÍVEIS VISUAIS DE SEVERIDADE */
+/* ====================================================================
+ * 14. ALERTAS E NÍVEIS VISUAIS DE SEVERIDADE
+ * ==================================================================== */
 
 .alert {
     display: flex;
@@ -518,7 +552,9 @@ button {
     color: #b88100;
 }
 
-/* INDICADORES NUMÉRICOS DO DASHBOARD */
+/* ====================================================================
+ * 15. INDICADORES NUMÉRICOS DO DASHBOARD
+ * ==================================================================== */
 
 .statistics {
     display: grid;
@@ -535,14 +571,18 @@ button {
     flex-direction: column;
 }
 
-/* LISTA DOS ÚLTIMOS EVENTOS */
+/* ====================================================================
+ * 16. LISTA DOS ÚLTIMOS EVENTOS
+ * ==================================================================== */
 
 #eventos p {
     padding: 12px 0;
     border-bottom: 1px solid #eee;
 }
 
-/* TABELA DO HISTÓRICO */
+/* ====================================================================
+ * 17. TABELA DO HISTÓRICO
+ * ==================================================================== */
 
 .table-container {
     width: 100%;
@@ -655,9 +695,11 @@ td {
     line-height: 1.4;
 }
 
-/* ALTO CONTRASTE */
+/* ====================================================================
+ * 18. ALTO CONTRASTE
+ * ==================================================================== */
 /* A classe body.alto-contraste é alternada pelo JavaScript.
- * Cores, bordas e indicadores de foco são substituídos aqui. */
+* Cores, bordas e indicadores de foco são substituídos aqui. */
 
 body.alto-contraste {
     background: #000;
@@ -815,7 +857,9 @@ body.alto-contraste input:focus-visible {
     outline-offset: 3px;
 }
 
-/* LAYOUT RESPONSIVO */
+/* ====================================================================
+ * 19. LAYOUT RESPONSIVO
+ * ==================================================================== */
 
 /* Até 1100 px: reorganiza menu e cartões principais. */
 @media (max-width: 1100px) {
