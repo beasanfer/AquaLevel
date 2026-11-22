@@ -9,19 +9,19 @@
  * ==================================================================== */
 
 * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html {
-    font-size: 100%;
+  font-size: 100%;
 }
 
 body {
-    font-family: Helvetica, sans-serif;
-    background: #f4f7fb;
-    color: #14213d;
+  font-family: Helvetica, sans-serif;
+  background: #f4f7fb;
+  color: #14213d;
 }
 
 /* ====================================================================
@@ -29,92 +29,92 @@ body {
  * ==================================================================== */
 
 .topbar {
-    min-height: 82px;
-    background: #082b53;
-    color: white;
-    padding: 12px 25px;
-    display: flex;
-    align-items: center;
-    gap: 25px;
+  min-height: 82px;
+  background: #082b53;
+  color: white;
+  padding: 12px 25px;
+  display: flex;
+  align-items: center;
+  gap: 25px;
 }
 
 .brand {
-    min-width: 220px;
+  min-width: 220px;
 }
 
 .brand h2 {
-    font-size: 24px;
+  font-size: 24px;
 }
 
 .brand span {
-    display: block;
-    font-size: 11px;
-    margin-top: 3px;
+  display: block;
+  font-size: 11px;
+  margin-top: 3px;
 }
 
 /* Rolagem horizontal evita que o menu expulse os controles vizinhos.
 * min-width: 0 permite que o item flex encolha conforme a tela. */
 .menu {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex: 1;
-    min-width: 0;
-    overflow-x: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .menu .nav-link {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 11px 12px;
-    border-radius: 8px;
-    color: white;
-    text-decoration: none;
-    cursor: pointer;
-    font-size: 14px;
-    white-space: nowrap;
-    transition: background 0.2s;
-    background: transparent;
-    border: 0;
-    font-family: inherit;
-    text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 12px;
+  border-radius: 8px;
+  color: white;
+  text-decoration: none;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: background 0.2s;
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  text-align: left;
 }
 
 .menu .nav-link:focus-visible {
-    outline: 3px solid #ffd600;
-    outline-offset: -3px;
+  outline: 3px solid #ffd600;
+  outline-offset: -3px;
 }
 
 .menu .nav-link img {
-    width: 20px;
-    height: 20px;
-    object-fit: contain;
-    flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 /* Tamanhos específicos para respeitar a proporção dos ícones PNG. */
 .menu .nav-link[data-page="dashboard"] img,
 .menu .nav-link[data-page="historico"] img,
 .menu .nav-link[data-page="alertas-page"] img {
-    width: 30px;
-    height: 30px;
+  width: 30px;
+  height: 30px;
 }
 
 .menu .nav-link[data-page="relatorios"] img,
 .menu .nav-link[data-page="sobre"] img {
-    width: 25px;
-    height: 25px;
+  width: 25px;
+  height: 25px;
 }
 
 .menu .nav-link[data-page="configuracoes"] {
-    padding-top: 16px;
-    padding-bottom: 16px;
+  padding-top: 16px;
+  padding-bottom: 16px;
 }
 
 .menu .nav-link:hover,
 .menu .active {
-    background: #0877e8;
+  background: #0877e8;
 }
 
 /* ====================================================================
@@ -122,38 +122,38 @@ body {
  * ==================================================================== */
 
 .accessibility {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .access-btn {
-    min-width: 38px;
-    min-height: 38px;
-    padding: 7px 9px;
-    border: 1px solid rgba(255, 255, 255, 0.65);
-    border-radius: 7px;
-    background: transparent;
-    color: white;
-    font-weight: bold;
-    font-size: 14px;
-    cursor: pointer;
-    font-family: inherit;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 7px;
+  background: transparent;
+  color: white;
+  font-weight: bold;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 /* Realce para hover e foco na navegação por teclado. */
 .access-btn:hover,
 .access-btn:focus-visible {
-    background: white;
-    color: #082b53;
-    outline: 3px solid #ffd600;
-    outline-offset: 2px;
+  background: white;
+  color: #082b53;
+  outline: 3px solid #ffd600;
+  outline-offset: 2px;
 }
 
 .contrast-btn {
-    min-width: auto;
-    white-space: nowrap;
+  min-width: auto;
+  white-space: nowrap;
 }
 
 /* ====================================================================
@@ -161,30 +161,30 @@ body {
  * ==================================================================== */
 
 .connection {
-    min-width: 120px;
-    flex-shrink: 0;
-    text-align: right;
+  min-width: 120px;
+  flex-shrink: 0;
+  text-align: right;
 }
 
 .connection strong {
-    display: block;
-    color: #68c989;
-    font-size: 13px;
+  display: block;
+  color: #68c989;
+  font-size: 13px;
 }
 
 .connection span {
-    font-size: 11px;
+  font-size: 11px;
 }
 
 /* PÁGINAS DA SPA: somente .active-page fica visível. */
 /* script.js alterna active-page para mostrar apenas uma página. */
 
 .page {
-    display: none;
+  display: none;
 }
 
 .page.active-page {
-    display: block;
+  display: block;
 }
 
 /* ====================================================================
@@ -192,8 +192,8 @@ body {
  * ==================================================================== */
 
 main {
-    width: 100%;
-    padding: 20px;
+  width: 100%;
+  padding: 20px;
 }
 
 /* ====================================================================
@@ -201,18 +201,18 @@ main {
  * ==================================================================== */
 
 header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
 }
 
 header h1 {
-    font-size: 26px;
+  font-size: 26px;
 }
 
 header p {
-    color: #68758b;
+  color: #68758b;
 }
 
 /* ====================================================================
@@ -221,33 +221,33 @@ header p {
 /* A classe hidden remove o banner do fluxo da página. */
 
 .sensor-banner {
-    background: #fff1f1;
-    color: #c92d2d;
-    border: 1px solid #f5c2c2;
-    border-radius: 8px;
-    padding: 12px 16px;
-    margin-bottom: 15px;
-    font-weight: bold;
+  background: #fff1f1;
+  color: #c92d2d;
+  border: 1px solid #f5c2c2;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 15px;
+  font-weight: bold;
 }
 
 .sensor-banner.hidden {
-    display: none;
+  display: none;
 }
 
 /* CARTÕES DE CONTEÚDO */
 
 .card {
-    background: white;
-    padding: 20px;
-    border-radius: 12px;
-    border: 1px solid #e1e6ef;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid #e1e6ef;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
 }
 
 .card h3 {
-    color: #0759ae;
-    margin-bottom: 18px;
-    font-size: 15px;
+  color: #0759ae;
+  margin-bottom: 18px;
+  font-size: 15px;
 }
 
 /* ====================================================================
@@ -256,46 +256,46 @@ header p {
 /* Os grids compõem os cartões; media queries adaptam as colunas. */
 
 .grid-top {
-    display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr;
-    gap: 15px;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 15px;
 }
 
 .grid-middle {
-    display: grid;
-    grid-template-columns: 1fr 1.1fr;
-    gap: 15px;
-    margin-top: 15px;
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 15px;
+  margin-top: 15px;
 }
 
 .grid-bottom {
-    display: grid;
-    grid-template-columns: 1.5fr 1fr;
-    gap: 15px;
-    margin-top: 15px;
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 15px;
+  margin-top: 15px;
 }
 
 .page-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 15px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 15px;
 }
 
 .config-grid {
-    display: grid;
-    grid-template-columns: 1.3fr 1fr;
-    gap: 15px;
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 15px;
 }
 
 .report-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 15px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
 }
 
 .sobre-grid {
-    display: grid;
-    grid-template-columns: 1fr;
+  display: grid;
+  grid-template-columns: 1fr;
 }
 
 /* ====================================================================
@@ -303,29 +303,29 @@ header p {
  * ==================================================================== */
 
 .nivel-content {
-    display: flex;
-    align-items: center;
-    justify-content: space-around;
-    gap: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 20px;
 }
 
 .gauge {
-    text-align: center;
+  text-align: center;
 }
 
 #percentual {
-    font-size: 55px;
-    color: #0877e8;
-    font-weight: bold;
+  font-size: 55px;
+  color: #0877e8;
+  font-weight: bold;
 }
 
 #litros {
-    font-size: 20px;
+  font-size: 20px;
 }
 
 .gauge p {
-    margin-top: 15px;
-    color: #29a45d;
+  margin-top: 15px;
+  color: #29a45d;
 }
 
 /* ====================================================================
@@ -335,23 +335,23 @@ header p {
 * A transição suaviza a subida ou descida da coluna de água. */
 
 .tanque {
-    width: 150px;
-    height: 190px;
-    border: 3px solid #728097;
-    border-radius: 15px 15px 30px 30px;
-    position: relative;
-    overflow: hidden;
-    background: #f5f8fb;
+  width: 150px;
+  height: 190px;
+  border: 3px solid #728097;
+  border-radius: 15px 15px 30px 30px;
+  position: relative;
+  overflow: hidden;
+  background: #f5f8fb;
 }
 
 .agua {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 0%; /* valor inicial até a primeira leitura */
-    background: #2990e8;
-    transition: height 0.5s;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 0%; /* valor inicial até a primeira leitura */
+  background: #2990e8;
+  transition: height 0.5s;
 }
 
 /* ====================================================================
@@ -359,18 +359,18 @@ header p {
  * ==================================================================== */
 
 .details {
-    display: flex;
-    justify-content: space-around;
-    border-top: 1px solid #eee;
-    margin-top: 20px;
-    padding-top: 15px;
-    gap: 10px;
+  display: flex;
+  justify-content: space-around;
+  border-top: 1px solid #eee;
+  margin-top: 20px;
+  padding-top: 15px;
+  gap: 10px;
 }
 
 .details span {
-    display: flex;
-    flex-direction: column;
-    font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
 }
 
 /* ====================================================================
@@ -378,129 +378,129 @@ header p {
  * ==================================================================== */
 
 .bomba-card {
-    text-align: center;
+  text-align: center;
 }
 
 #bombaStatus {
-    color: #27a355;
-    font-size: 28px;
+  color: #27a355;
+  font-size: 28px;
 }
 
 .bomba-descricao {
-    font-size: 16px;
-    line-height: 1.4;
-    margin-top: 6px;
+  font-size: 16px;
+  line-height: 1.4;
+  margin-top: 6px;
 }
 
 .bomba-info {
-    margin-top: 22px;
-    border-top: 1px solid #e1e6ef;
-    padding-top: 16px;
+  margin-top: 22px;
+  border-top: 1px solid #e1e6ef;
+  padding-top: 16px;
 }
 
 .bomba-info div {
-    display: flex;
-    flex-direction: column;
-    margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 14px;
 }
 
 .bomba-info span {
-    font-size: 13px;
-    color: #68758b;
-    margin-bottom: 4px;
+  font-size: 13px;
+  color: #68758b;
+  margin-bottom: 4px;
 }
 
 .bomba-info strong {
-    font-size: 14px;
-    color: #14213d;
+  font-size: 14px;
+  color: #14213d;
 }
 
 /* CARTÕES DE MODO E CONTROLE */
 
 .modo-card,
 .controle-card {
-    text-align: center;
+  text-align: center;
 }
 
 .modo-card p,
 .controle-card p {
-    font-size: 16px;
-    line-height: 1.4;
-    margin-top: 8px;
+  font-size: 16px;
+  line-height: 1.4;
+  margin-top: 8px;
 }
 
 /* BOTÕES E ESTADOS INTERATIVOS */
 
 button {
-    cursor: pointer;
-    font-size: 14px;
-    font-family: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
 }
 
 /* Seleção entre os modos automático e manual. */
 .mode {
-    width: 100%;
-    margin-bottom: 10px;
-    padding: 14px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    background: white;
-    transition:
-        background 0.2s,
-        color 0.2s;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 14px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  transition:
+    background 0.2s,
+    color 0.2s;
 }
 
 .active-mode {
-    background: #29a455;
-    color: white;
-    border-color: #29a455;
+  background: #29a455;
+  color: white;
+  border-color: #29a455;
 }
 
 /* Estilo compartilhado por ligar, desligar e salvar. */
 .btn {
-    width: 100%;
-    padding: 14px;
-    border: none;
-    border-radius: 7px;
-    color: white;
-    margin-bottom: 10px;
-    transition: opacity 0.2s;
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 7px;
+  color: white;
+  margin-bottom: 10px;
+  transition: opacity 0.2s;
 }
 
 .btn:hover {
-    opacity: 0.9;
+  opacity: 0.9;
 }
 
 .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .ligar {
-    background: #29aa5b;
+  background: #29aa5b;
 }
 
 .desligar {
-    background: #ef4040;
+  background: #ef4040;
 }
 
 .salvar {
-    background: #0877e8;
-    margin-top: 20px;
+  background: #0877e8;
+  margin-top: 20px;
 }
 
 /* A edição preserva os valores escolhidos até Salvar ou Cancelar. */
 .botoes-limites {
-    display: flex;
-    gap: 10px;
-    margin-top: 20px;
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
 }
 .botoes-limites .btn {
-    margin: 0;
-    flex: 1;
+  margin: 0;
+  flex: 1;
 }
 .cancelar {
-    background: #59677a;
+  background: #59677a;
 }
 
 /* ====================================================================
@@ -508,20 +508,20 @@ button {
  * ==================================================================== */
 
 .limits {
-    display: flex;
-    justify-content: space-around;
-    text-align: center;
-    gap: 20px;
+  display: flex;
+  justify-content: space-around;
+  text-align: center;
+  gap: 20px;
 }
 
 .limits h2 {
-    color: #0877e8;
-    margin: 10px;
+  color: #0877e8;
+  margin: 10px;
 }
 
 .limits input {
-    width: 100%;
-    margin-top: 10px;
+  width: 100%;
+  margin-top: 10px;
 }
 
 /* ====================================================================
@@ -529,27 +529,27 @@ button {
  * ==================================================================== */
 
 .alert {
-    display: flex;
-    gap: 15px;
-    padding: 15px;
-    margin-bottom: 10px;
-    border-radius: 8px;
+  display: flex;
+  gap: 15px;
+  padding: 15px;
+  margin-bottom: 10px;
+  border-radius: 8px;
 }
 
 .alert small {
-    display: block;
-    margin-top: 8px;
-    opacity: 0.7;
+  display: block;
+  margin-top: 8px;
+  opacity: 0.7;
 }
 
 .danger {
-    background: #fff1f1;
-    color: #c92d2d;
+  background: #fff1f1;
+  color: #c92d2d;
 }
 
 .warning {
-    background: #fff8e8;
-    color: #b88100;
+  background: #fff8e8;
+  color: #b88100;
 }
 
 /* ====================================================================
@@ -557,18 +557,18 @@ button {
  * ==================================================================== */
 
 .statistics {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    margin-top: 15px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 15px;
 }
 
 .statistics div {
-    background: #f5f7fa;
-    padding: 12px;
-    border-radius: 8px;
-    display: flex;
-    flex-direction: column;
+  background: #f5f7fa;
+  padding: 12px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ====================================================================
@@ -576,8 +576,8 @@ button {
  * ==================================================================== */
 
 #eventos p {
-    padding: 12px 0;
-    border-bottom: 1px solid #eee;
+  padding: 12px 0;
+  border-bottom: 1px solid #eee;
 }
 
 /* ====================================================================
@@ -585,114 +585,114 @@ button {
  * ==================================================================== */
 
 .table-container {
-    width: 100%;
-    overflow-x: auto;
+  width: 100%;
+  overflow-x: auto;
 }
 
 table {
-    width: 100%;
-    border-collapse: collapse;
+  width: 100%;
+  border-collapse: collapse;
 }
 
 th {
-    background: #f4f7fb;
-    color: #0759ae;
-    text-align: left;
-    padding: 14px;
-    font-size: 13px;
+  background: #f4f7fb;
+  color: #0759ae;
+  text-align: left;
+  padding: 14px;
+  font-size: 13px;
 }
 
 td {
-    padding: 14px;
-    border-bottom: 1px solid #e1e6ef;
-    font-size: 14px;
+  padding: 14px;
+  border-bottom: 1px solid #e1e6ef;
+  font-size: 14px;
 }
 
 /* CARTÕES DE CONFIGURAÇÕES */
 
 .config-item {
-    padding: 16px 0;
-    border-bottom: 1px solid #e1e6ef;
+  padding: 16px 0;
+  border-bottom: 1px solid #e1e6ef;
 }
 
 .config-item:last-child {
-    border-bottom: none;
+  border-bottom: none;
 }
 
 .config-item label {
-    font-weight: bold;
-    display: block;
-    margin-bottom: 5px;
+  font-weight: bold;
+  display: block;
+  margin-bottom: 5px;
 }
 
 .config-item p {
-    color: #68758b;
-    font-size: 14px;
-    margin-bottom: 8px;
+  color: #68758b;
+  font-size: 14px;
+  margin-bottom: 8px;
 }
 
 .config-item strong {
-    color: #0877e8;
-    font-size: 20px;
+  color: #0877e8;
+  font-size: 20px;
 }
 
 /* CARTÕES DE ESTATÍSTICAS */
 
 .report-card {
-    text-align: center;
+  text-align: center;
 }
 
 .report-card span {
-    color: #68758b;
-    font-size: 14px;
+  color: #68758b;
+  font-size: 14px;
 }
 
 .report-card strong {
-    display: block;
-    color: #0877e8;
-    font-size: 32px;
-    margin: 12px 0;
+  display: block;
+  color: #0877e8;
+  font-size: 32px;
+  margin: 12px 0;
 }
 
 .report-card p {
-    color: #68758b;
-    font-size: 13px;
+  color: #68758b;
+  font-size: 13px;
 }
 
 /* INFORMAÇÕES DO PROJETO */
 
 .sobre-grid h2 {
-    margin-bottom: 12px;
+  margin-bottom: 12px;
 }
 
 .sobre-texto {
-    color: #68758b;
-    line-height: 1.6;
-    margin-bottom: 25px;
+  color: #68758b;
+  line-height: 1.6;
+  margin-bottom: 25px;
 }
 
 .sobre-info {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
 }
 
 .sobre-info div {
-    background: #f5f7fa;
-    padding: 18px;
-    border-radius: 8px;
+  background: #f5f7fa;
+  padding: 18px;
+  border-radius: 8px;
 }
 
 .sobre-info strong {
-    display: block;
-    color: #0759ae;
-    margin-bottom: 7px;
+  display: block;
+  color: #0759ae;
+  margin-bottom: 7px;
 }
 
 .sobre-info span {
-    color: #68758b;
-    font-size: 14px;
-    line-height: 1.4;
+  color: #68758b;
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 /* ====================================================================
@@ -702,75 +702,75 @@ td {
 * Cores, bordas e indicadores de foco são substituídos aqui. */
 
 body.alto-contraste {
-    background: #000;
-    color: #fff;
+  background: #000;
+  color: #fff;
 }
 
 body.alto-contraste .topbar {
-    background: #000;
-    border-bottom: 2px solid #fff;
+  background: #000;
+  border-bottom: 2px solid #fff;
 }
 
 body.alto-contraste .menu .nav-link {
-    color: #fff;
+  color: #fff;
 }
 
 body.alto-contraste .menu .nav-link:hover,
 body.alto-contraste .menu .active {
-    background: #fff;
-    color: #000;
+  background: #fff;
+  color: #000;
 }
 
 /* Inverte a cor dos ícones ativos para manter a visibilidade. */
 body.alto-contraste .menu .nav-link:hover img,
 body.alto-contraste .menu .active img {
-    filter: invert(1);
+  filter: invert(1);
 }
 
 body.alto-contraste .card,
 body.alto-contraste .mode,
 body.alto-contraste .tanque {
-    background: #000;
-    color: #fff;
-    border-color: #fff;
-    box-shadow: none;
+  background: #000;
+  color: #fff;
+  border-color: #fff;
+  box-shadow: none;
 }
 
 /* Destaca o modo selecionado sem perder o contraste do texto. */
 body.alto-contraste .mode.active-mode {
-    background: #00ffff;
-    color: #000;
-    border-color: #00ffff;
+  background: #00ffff;
+  color: #000;
+  border-color: #00ffff;
 }
 
 /* As ações do painel usam a mesma paleta preto/branco/ciano do contraste. */
 body.alto-contraste .controle-card .btn,
 body.alto-contraste .botoes-limites .btn {
-    background: #000;
-    color: #fff;
-    border: 2px solid #fff;
+  background: #000;
+  color: #fff;
+  border: 2px solid #fff;
 }
 
 body.alto-contraste .controle-card .ligar,
 body.alto-contraste .botoes-limites .salvar {
-    background: #00ffff;
-    color: #000;
-    border-color: #00ffff;
+  background: #00ffff;
+  color: #000;
+  border-color: #00ffff;
 }
 
 body.alto-contraste .controle-card .desligar {
-    background: #fff;
-    color: #000;
-    border-color: #fff;
+  background: #fff;
+  color: #000;
+  border-color: #fff;
 }
 
 /* Desativados continuam legíveis sem parecer disponíveis para clique. */
 body.alto-contraste .controle-card .btn:disabled,
 body.alto-contraste .botoes-limites .btn:disabled {
-    background: #161616;
-    color: #bdbdbd;
-    border-color: #a6a6a6;
-    opacity: 1;
+  background: #161616;
+  color: #bdbdbd;
+  border-color: #a6a6a6;
+  opacity: 1;
 }
 
 body.alto-contraste header p,
@@ -781,7 +781,7 @@ body.alto-contraste .report-card span,
 body.alto-contraste .report-card p,
 body.alto-contraste .sobre-texto,
 body.alto-contraste .sobre-info span {
-    color: #fff;
+  color: #fff;
 }
 
 /* Destaques em ciano sobre superfícies escuras. */
@@ -792,69 +792,69 @@ body.alto-contraste .report-card strong,
 body.alto-contraste .sobre-info strong,
 body.alto-contraste th,
 body.alto-contraste #percentual {
-    color: #00ffff;
+  color: #00ffff;
 }
 
 body.alto-contraste .statistics div,
 body.alto-contraste .sobre-info div,
 body.alto-contraste th {
-    background: #111;
-    color: #fff;
+  background: #111;
+  color: #fff;
 }
 
 body.alto-contraste .details,
 body.alto-contraste .bomba-info,
 body.alto-contraste td,
 body.alto-contraste .config-item {
-    border-color: #fff;
+  border-color: #fff;
 }
 
 body.alto-contraste .danger {
-    background: #2b0000;
-    color: #fff;
-    border: 1px solid #ff5c5c;
+  background: #2b0000;
+  color: #fff;
+  border: 1px solid #ff5c5c;
 }
 
 body.alto-contraste .warning {
-    background: #2b2300;
-    color: #fff;
-    border: 1px solid #ffd600;
+  background: #2b2300;
+  color: #fff;
+  border: 1px solid #ffd600;
 }
 
 body.alto-contraste .sensor-banner {
-    background: #2b0000;
-    color: #fff;
-    border: 1px solid #ff5c5c;
+  background: #2b0000;
+  color: #fff;
+  border: 1px solid #ff5c5c;
 }
 
 body.alto-contraste .access-btn {
-    background: #000;
-    color: #fff;
-    border-color: #fff;
+  background: #000;
+  color: #fff;
+  border-color: #fff;
 }
 
 body.alto-contraste .access-btn:hover,
 body.alto-contraste .access-btn:focus-visible,
 body.alto-contraste .access-btn.ativo {
-    background: #fff;
-    color: #000;
-    outline-color: #00ffff;
+  background: #fff;
+  color: #000;
+  outline-color: #00ffff;
 }
 
 body.alto-contraste input[type="range"] {
-    accent-color: #00ffff;
+  accent-color: #00ffff;
 }
 
 body.alto-contraste .agua {
-    background: #00ffff;
+  background: #00ffff;
 }
 
 /* Realce de foco para navegação por teclado. */
 body.alto-contraste button:focus-visible,
 body.alto-contraste .nav-link:focus-visible,
 body.alto-contraste input:focus-visible {
-    outline: 3px solid #00ffff;
-    outline-offset: 3px;
+  outline: 3px solid #00ffff;
+  outline-offset: 3px;
 }
 
 /* ====================================================================
@@ -863,127 +863,127 @@ body.alto-contraste input:focus-visible {
 
 /* Até 1100 px: reorganiza menu e cartões principais. */
 @media (max-width: 1100px) {
-    .topbar {
-        flex-wrap: wrap;
-    }
+  .topbar {
+    flex-wrap: wrap;
+  }
 
-    .menu {
-        order: 3;
-        width: 100%;
-        overflow-x: auto;
-    }
+  .menu {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+  }
 
-    .connection {
-        margin-left: auto;
-    }
+  .connection {
+    margin-left: auto;
+  }
 
-    .grid-top {
-        grid-template-columns: 2fr 1fr 1fr;
-    }
+  .grid-top {
+    grid-template-columns: 2fr 1fr 1fr;
+  }
 
-    /* O controle rápido ocupa uma linha inteira nesse layout. */
-    .controle-card {
-        grid-column: span 3;
-    }
+  /* O controle rápido ocupa uma linha inteira nesse layout. */
+  .controle-card {
+    grid-column: span 3;
+  }
 
-    .report-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
+  .report-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 /* Até 900 px: empilha cartões e reduz colunas estatísticas. */
 @media (max-width: 900px) {
-    .grid-top,
-    .grid-middle,
-    .grid-bottom,
-    .config-grid {
-        grid-template-columns: 1fr;
-    }
+  .grid-top,
+  .grid-middle,
+  .grid-bottom,
+  .config-grid {
+    grid-template-columns: 1fr;
+  }
 
-    .controle-card {
-        grid-column: auto;
-    }
+  .controle-card {
+    grid-column: auto;
+  }
 
-    .statistics {
-        grid-template-columns: repeat(2, 1fr);
-    }
+  .statistics {
+    grid-template-columns: repeat(2, 1fr);
+  }
 
-    .nivel-content {
-        flex-direction: column;
-    }
+  .nivel-content {
+    flex-direction: column;
+  }
 
-    header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-    }
+  header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
 }
 
 /* Até 600 px: menu compacto e indicadores empilhados. */
 @media (max-width: 600px) {
-    .topbar {
-        padding: 12px;
-    }
+  .topbar {
+    padding: 12px;
+  }
 
-    .brand {
-        min-width: auto;
-    }
+  .brand {
+    min-width: auto;
+  }
 
-    .brand span {
-        display: none;
-    }
+  .brand span {
+    display: none;
+  }
 
-    /* Oculta o status textual para liberar espaço na barra. */
-    .connection {
-        display: none;
-    }
+  /* Oculta o status textual para liberar espaço na barra. */
+  .connection {
+    display: none;
+  }
 
-    .accessibility {
-        margin-left: auto;
-    }
+  .accessibility {
+    margin-left: auto;
+  }
 
-    /* Exibe só o ícone de contraste em telas estreitas. */
-    .contrast-btn {
-        font-size: 0;
-    }
+  /* Exibe só o ícone de contraste em telas estreitas. */
+  .contrast-btn {
+    font-size: 0;
+  }
 
-    .contrast-btn::after {
-        content: "◐";
-        font-size: 18px;
-    }
+  .contrast-btn::after {
+    content: "◐";
+    font-size: 18px;
+  }
 
-    .menu {
-        gap: 4px;
-    }
+  .menu {
+    gap: 4px;
+  }
 
-    .menu .nav-link {
-        padding: 9px 10px;
-        font-size: 13px;
-    }
+  .menu .nav-link {
+    padding: 9px 10px;
+    font-size: 13px;
+  }
 
-    main {
-        padding: 12px;
-    }
+  main {
+    padding: 12px;
+  }
 
-    .card {
-        padding: 15px;
-    }
+  .card {
+    padding: 15px;
+  }
 
-    #percentual {
-        font-size: 45px;
-    }
+  #percentual {
+    font-size: 45px;
+  }
 
-    .statistics,
-    .report-grid,
-    .sobre-info {
-        grid-template-columns: 1fr;
-    }
+  .statistics,
+  .report-grid,
+  .sobre-info {
+    grid-template-columns: 1fr;
+  }
 
-    .details {
-        flex-direction: column;
-    }
+  .details {
+    flex-direction: column;
+  }
 
-    .botoes-limites {
-        flex-direction: column;
-    }
+  .botoes-limites {
+    flex-direction: column;
+  }
 }

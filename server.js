@@ -359,7 +359,6 @@ function registrarHeartbeat(corpo) {
   if (bloqueado && !sistema.bloqueioManual) cancelarComandoManual();
 
   sistema.bloqueioManual = bloqueado;
-
   ultimaLeituraRecebida = Date.now();
   sistema.ultimaMensagemDataHora = new Date().toISOString();
   sistema.esp32Online = true;

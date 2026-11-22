@@ -1,550 +1,489 @@
 <!doctype html>
 <html lang="pt-BR">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>AquaLevel</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AquaLevel</title>
 
-        <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css" />
 
-        <!-- Chart.js é entregue por /vendor/chartjs, rota estática do backend.
-      Não é necessário carregar a biblioteca por CDN. -->
-        <script src="/vendor/chartjs/chart.umd.min.js"></script>
-    </head>
+    <!-- Chart.js é entregue por /vendor/chartjs, rota estática do backend.
+        Não é necessário carregar a biblioteca por CDN. -->
+    <script src="/vendor/chartjs/chart.umd.min.js"></script>
+  </head>
 
-    <body>
-        <!-- Navegação SPA: todas as páginas main.page permanecem no DOM.
+  <body>
+    <!-- Navegação SPA: todas as páginas main.page permanecem no DOM.
       script.js alterna a classe active-page usando o atributo data-page. -->
 
-        <!-- =================================================================
+    <!-- =================================================================
          01. BARRA SUPERIOR E NAVEGAÇÃO
          ================================================================= -->
-        <nav class="topbar">
-            <div class="brand">
-                <h2>AquaLevel</h2>
-            </div>
+    <nav class="topbar">
+      <div class="brand">
+        <h2>AquaLevel</h2>
+      </div>
 
-            <div class="menu">
-                <button
-                    type="button"
-                    class="nav-link active"
-                    data-page="dashboard"
-                    aria-current="page"
-                >
-                    <img src="./icons/dashboard.png" alt="" />
-                    Dashboard
-                </button>
+      <div class="menu">
+        <button type="button" class="nav-link active" data-page="dashboard" aria-current="page">
+          <img src="./icons/dashboard.png" alt="" />
+          Dashboard
+        </button>
 
-                <button type="button" class="nav-link" data-page="historico">
-                    <img src="./icons/historico.png" alt="" />
-                    Histórico
-                </button>
+        <button type="button" class="nav-link" data-page="historico">
+          <img src="./icons/historico.png" alt="" />
+          Histórico
+        </button>
 
-                <button type="button" class="nav-link" data-page="alertas-page">
-                    <img src="./icons/alerta.png" alt="" />
-                    Alertas
-                </button>
+        <button type="button" class="nav-link" data-page="alertas-page">
+          <img src="./icons/alerta.png" alt="" />
+          Alertas
+        </button>
 
-                <button
-                    type="button"
-                    class="nav-link"
-                    data-page="configuracoes"
-                >
-                    <img src="./icons/configuracao.png" alt="" />
-                    Configurações
-                </button>
+        <button type="button" class="nav-link" data-page="configuracoes">
+          <img src="./icons/configuracao.png" alt="" />
+          Configurações
+        </button>
 
-                <button type="button" class="nav-link" data-page="relatorios">
-                    <img src="./icons/relatorio.png" alt="" />
-                    Relatórios
-                </button>
+        <button type="button" class="nav-link" data-page="relatorios">
+          <img src="./icons/relatorio.png" alt="" />
+          Relatórios
+        </button>
 
-                <button type="button" class="nav-link" data-page="sobre">
-                    <img src="./icons/informacao.png" alt="" />
-                    Sobre
-                </button>
-            </div>
+        <button type="button" class="nav-link" data-page="sobre">
+          <img src="./icons/informacao.png" alt="" />
+          Sobre
+        </button>
+      </div>
 
-            <!-- Controles de fonte e alto contraste persistidos por script.js. -->
-            <div class="accessibility" aria-label="Controles de acessibilidade">
-                <button
-                    id="diminuirFonte"
-                    class="access-btn"
-                    type="button"
-                    aria-label="Diminuir tamanho da fonte"
-                    title="Diminuir fonte"
-                >
-                    A−
-                </button>
+      <!-- Controles de fonte e alto contraste persistidos por script.js. -->
+      <div class="accessibility" aria-label="Controles de acessibilidade">
+        <button
+          id="diminuirFonte"
+          class="access-btn"
+          type="button"
+          aria-label="Diminuir tamanho da fonte"
+          title="Diminuir fonte"
+        >
+          A−
+        </button>
 
-                <button
-                    id="aumentarFonte"
-                    class="access-btn"
-                    type="button"
-                    aria-label="Aumentar tamanho da fonte"
-                    title="Aumentar fonte"
-                >
-                    A+
-                </button>
+        <button
+          id="aumentarFonte"
+          class="access-btn"
+          type="button"
+          aria-label="Aumentar tamanho da fonte"
+          title="Aumentar fonte"
+        >
+          A+
+        </button>
 
-                <button
-                    id="alternarContraste"
-                    class="access-btn contrast-btn"
-                    type="button"
-                    aria-pressed="false"
-                    aria-label="Ativar ou desativar alto contraste"
-                    title="Ativar alto contraste"
-                >
-                    ◐ Contraste
-                </button>
-            </div>
+        <button
+          id="alternarContraste"
+          class="access-btn contrast-btn"
+          type="button"
+          aria-pressed="false"
+          aria-label="Ativar ou desativar alto contraste"
+          title="Ativar alto contraste"
+        >
+          ◐ Contraste
+        </button>
+      </div>
 
-            <div class="connection">
-                <strong id="wifiStatus">● Verificando</strong>
-                <span>ESP32 • Aguardando dados</span>
-            </div>
-        </nav>
+      <div class="connection">
+        <strong id="wifiStatus">● Verificando</strong>
+        <span>ESP32 • Aguardando dados</span>
+      </div>
+    </nav>
 
-        <!-- =================================================================
+    <!-- =================================================================
          02. DASHBOARD
          ================================================================= -->
-        <main id="dashboard" class="page active-page">
-            <header>
-                <div>
-                    <h1>Dashboard</h1>
-                    <p>Visão geral do reservatório e da bomba</p>
-                </div>
+    <main id="dashboard" class="page active-page">
+      <header>
+        <div>
+          <h1>Dashboard</h1>
+          <p>Visão geral do reservatório e da bomba</p>
+        </div>
 
-                <div class="update">
-                    Interface atualizada:
-                    <strong id="horaAtualizacao">--:--:--</strong>
-                </div>
-            </header>
+        <div class="update">
+          Interface atualizada:
+          <strong id="horaAtualizacao">--:--:--</strong>
+        </div>
+      </header>
 
-            <!-- Exibido quando /api/status informa sensorOK=false. -->
-            <div id="sensorBanner" class="sensor-banner hidden" role="alert">
-                ⚠ Sensor de nível com falha — exibindo a última leitura válida.
+      <!-- Exibido quando /api/status informa sensorOK=false. -->
+      <div id="sensorBanner" class="sensor-banner hidden" role="alert">
+        ⚠ Sensor de nível com falha — exibindo a última leitura válida.
+      </div>
+
+      <section class="grid-top">
+        <article class="card nivel-card">
+          <h3>NÍVEL DO RESERVATÓRIO</h3>
+
+          <div class="nivel-content">
+            <div class="gauge">
+              <div id="percentual">--</div>
+              <span id="litros">-- litros</span>
+              <p>● <span id="nivelStatus">--</span></p>
             </div>
 
-            <section class="grid-top">
-                <article class="card nivel-card">
-                    <h3>NÍVEL DO RESERVATÓRIO</h3>
+            <div class="tanque">
+              <div class="agua" id="agua"></div>
+            </div>
+          </div>
 
-                    <div class="nivel-content">
-                        <div class="gauge">
-                            <div id="percentual">--</div>
-                            <span id="litros">-- litros</span>
-                            <p>● <span id="nivelStatus">--</span></p>
-                        </div>
+          <div class="details">
+            <span>
+              Capacidade
+              <strong id="capacidadeLitros">-- litros</strong>
+            </span>
 
-                        <div class="tanque">
-                            <div class="agua" id="agua"></div>
-                        </div>
-                    </div>
+            <span>
+              Altura da água
+              <strong id="altura">-- cm</strong>
+            </span>
 
-                    <div class="details">
-                        <span>
-                            Capacidade
-                            <strong id="capacidadeLitros">-- litros</strong>
-                        </span>
+            <span>
+              Última medição
+              <strong id="ultimaMedicao">--:--:--</strong>
+            </span>
+          </div>
+        </article>
 
-                        <span>
-                            Altura da água
-                            <strong id="altura">-- cm</strong>
-                        </span>
+        <!-- Estado lógico da bomba informado pelo backend. -->
+        <article class="card bomba-card">
+          <h3>BOMBA</h3>
 
-                        <span>
-                            Última medição
-                            <strong id="ultimaMedicao">--:--:--</strong>
-                        </span>
-                    </div>
-                </article>
+          <h2 id="bombaStatus">--</h2>
 
-                <!-- Estado lógico da bomba informado pelo backend. -->
-                <article class="card bomba-card">
-                    <h3>BOMBA</h3>
+          <p id="bombaDescricao" class="bomba-descricao" aria-live="polite">
+            Aguardando leitura...
+          </p>
 
-                    <h2 id="bombaStatus">--</h2>
+          <div class="bomba-info">
+            <div>
+              <span>Acionamento</span>
+              <strong id="acionamentoBomba">--</strong>
+            </div>
+          </div>
+        </article>
 
-                    <p
-                        id="bombaDescricao"
-                        class="bomba-descricao"
-                        aria-live="polite"
-                    >
-                        Aguardando leitura...
-                    </p>
+        <!-- Alterna entre operação automática e manual via API. -->
+        <article class="card modo-card">
+          <h3>MODO DE OPERAÇÃO</h3>
+          <button id="btnAutomatico" class="mode active-mode">Automático</button>
+          <button id="btnManual" class="mode">Manual</button>
+          <p>A bomba opera com base nos limites configurados.</p>
+        </article>
 
-                    <div class="bomba-info">
-                        <div>
-                            <span>Acionamento</span>
-                            <strong id="acionamentoBomba">--</strong>
-                        </div>
-                    </div>
-                </article>
+        <!-- Disponível apenas quando o modo manual está ativo. -->
+        <article class="card controle-card">
+          <h3>CONTROLE RÁPIDO</h3>
+          <button id="ligarBomba" class="btn ligar">▶ Ligar bomba</button>
+          <button id="desligarBomba" class="btn desligar">■ Desligar bomba</button>
+          <p>Disponível somente no modo manual.</p>
+        </article>
+      </section>
 
-                <!-- Alterna entre operação automática e manual via API. -->
-                <article class="card modo-card">
-                    <h3>MODO DE OPERAÇÃO</h3>
+      <!-- Limites de acionamento e alertas ativos. -->
+      <section class="grid-middle">
+        <article class="card">
+          <h3>LIMITES CONFIGURADOS</h3>
 
-                    <button id="btnAutomatico" class="mode active-mode">
-                        Automático
-                    </button>
+          <div class="limits">
+            <div>
+              <label>Nível mínimo</label>
+              <h2><span id="minValue">30</span>%</h2>
 
-                    <button id="btnManual" class="mode">Manual</button>
+              <input
+                id="minimo"
+                type="range"
+                min="1"
+                max="96"
+                value="30"
+                aria-label="Nível mínimo"
+              />
+            </div>
 
-                    <p>A bomba opera com base nos limites configurados.</p>
-                </article>
+            <!-- Banda de histerese: máximo - mínimo. -->
+            <div>
+              <label>Banda de operação</label>
+              <h2><span id="bandaValue">60</span>%</h2>
+            </div>
 
-                <!-- Disponível apenas quando o modo manual está ativo. -->
-                <article class="card controle-card">
-                    <h3>CONTROLE RÁPIDO</h3>
+            <div>
+              <label>Nível máximo</label>
+              <h2><span id="maxValue">90</span>%</h2>
 
-                    <button id="ligarBomba" class="btn ligar">
-                        ▶ Ligar bomba
-                    </button>
+              <!-- O máximo permitido é 97%; o corte de segurança acontece em 98%. -->
+              <input
+                id="maximo"
+                type="range"
+                min="2"
+                max="97"
+                value="90"
+                aria-label="Nível máximo"
+              />
+            </div>
+          </div>
 
-                    <button id="desligarBomba" class="btn desligar">
-                        ■ Desligar bomba
-                    </button>
+          <div class="botoes-limites">
+            <button id="salvarLimites" class="btn salvar" type="button">Salvar limites</button>
+            <button id="cancelarLimites" class="btn cancelar" type="button" disabled>
+              Cancelar edição
+            </button>
+          </div>
+        </article>
 
-                    <p>Disponível somente no modo manual.</p>
-                </article>
-            </section>
+        <article class="card">
+          <h3>ALERTAS ATIVOS</h3>
 
-            <!-- Limites de acionamento e alertas ativos. -->
-            <section class="grid-middle">
-                <article class="card">
-                    <h3>LIMITES CONFIGURADOS</h3>
+          <div id="alertas">
+            <p>Carregando alertas...</p>
+          </div>
+        </article>
+      </section>
 
-                    <div class="limits">
-                        <div>
-                            <label>Nível mínimo</label>
-                            <h2><span id="minValue">30</span>%</h2>
+      <!-- Gráfico de medições, estatísticas e eventos recentes. -->
+      <section class="grid-bottom">
+        <article class="card">
+          <h3>HISTÓRICO DO NÍVEL</h3>
 
-                            <input
-                                id="minimo"
-                                type="range"
-                                min="1"
-                                max="96"
-                                value="30"
-                                aria-label="Nível mínimo"
-                            />
-                        </div>
+          <!-- Exibe as 20 medições mais recentes retornadas pelo histórico. -->
+          <canvas id="graficoNivel"></canvas>
 
-                        <!-- Banda de histerese: máximo - mínimo. -->
-                        <div>
-                            <label>Banda de operação</label>
-                            <h2><span id="bandaValue">60</span>%</h2>
-                        </div>
+          <div class="statistics">
+            <div>
+              Nível médio
+              <strong id="statsNivelMedio">--</strong>
+            </div>
 
-                        <div>
-                            <label>Nível máximo</label>
-                            <h2><span id="maxValue">90</span>%</h2>
+            <div>
+              Nível máximo
+              <strong id="statsNivelMaximo">--</strong>
+            </div>
 
-                            <!-- O máximo permitido é 97%; o corte de segurança acontece em 98%. -->
-                            <input
-                                id="maximo"
-                                type="range"
-                                min="2"
-                                max="97"
-                                value="90"
-                                aria-label="Nível máximo"
-                            />
-                        </div>
-                    </div>
+            <div>
+              Nível mínimo
+              <strong id="statsNivelMinimo">--</strong>
+            </div>
 
-                    <div class="botoes-limites">
-                        <button
-                            id="salvarLimites"
-                            class="btn salvar"
-                            type="button"
-                        >
-                            Salvar limites
-                        </button>
-                        <button
-                            id="cancelarLimites"
-                            class="btn cancelar"
-                            type="button"
-                            disabled
-                        >
-                            Cancelar edição
-                        </button>
-                    </div>
-                </article>
+            <div>
+              Consumo estimado
+              <strong id="statsConsumo">--</strong>
+            </div>
+          </div>
+        </article>
 
-                <article class="card">
-                    <h3>ALERTAS ATIVOS</h3>
+        <article class="card">
+          <h3>ÚLTIMOS EVENTOS</h3>
 
-                    <div id="alertas">
-                        <p>Carregando alertas...</p>
-                    </div>
-                </article>
-            </section>
+          <div id="eventos">
+            <p>Carregando eventos...</p>
+          </div>
+        </article>
+      </section>
+    </main>
 
-            <!-- Gráfico de medições, estatísticas e eventos recentes. -->
-            <section class="grid-bottom">
-                <article class="card">
-                    <h3>HISTÓRICO DO NÍVEL</h3>
-
-                    <!-- Exibe as 20 medições mais recentes retornadas pelo histórico. -->
-                    <canvas id="graficoNivel"></canvas>
-
-                    <div class="statistics">
-                        <div>
-                            Nível médio
-                            <strong id="statsNivelMedio">--</strong>
-                        </div>
-
-                        <div>
-                            Nível máximo
-                            <strong id="statsNivelMaximo">--</strong>
-                        </div>
-
-                        <div>
-                            Nível mínimo
-                            <strong id="statsNivelMinimo">--</strong>
-                        </div>
-
-                        <div>
-                            Consumo estimado
-                            <strong id="statsConsumo">--</strong>
-                        </div>
-                    </div>
-                </article>
-
-                <article class="card">
-                    <h3>ÚLTIMOS EVENTOS</h3>
-
-                    <div id="eventos">
-                        <p>Carregando eventos...</p>
-                    </div>
-                </article>
-            </section>
-        </main>
-
-        <!-- =================================================================
+    <!-- =================================================================
          03. HISTÓRICO DE MEDIÇÕES
          ================================================================= -->
-        <main id="historico" class="page">
-            <header>
-                <div>
-                    <h1>Histórico</h1>
-                    <p>Histórico de medições e eventos do reservatório</p>
-                </div>
-            </header>
+    <main id="historico" class="page">
+      <header>
+        <div>
+          <h1>Histórico</h1>
+          <p>Histórico de medições e eventos do reservatório</p>
+        </div>
+      </header>
 
-            <section class="page-grid">
-                <article class="card">
-                    <h3>HISTÓRICO DE MEDIÇÕES</h3>
+      <section class="page-grid">
+        <article class="card">
+          <h3>HISTÓRICO DE MEDIÇÕES</h3>
 
-                    <!-- Tabela preenchida por buscarHistorico(), em script.js. -->
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Data</th>
-                                    <th>Hora</th>
-                                    <th>Nível</th>
-                                    <th>Volume</th>
-                                    <th>Bomba</th>
-                                    <th>Modo</th>
-                                </tr>
-                            </thead>
+          <!-- Tabela preenchida por buscarHistorico(), em script.js. -->
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Hora</th>
+                  <th>Nível</th>
+                  <th>Volume</th>
+                  <th>Bomba</th>
+                  <th>Modo</th>
+                </tr>
+              </thead>
 
-                            <tbody id="tabelaHistorico">
-                                <tr>
-                                    <td colspan="6">Carregando histórico...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </article>
-            </section>
-        </main>
+              <tbody id="tabelaHistorico">
+                <tr>
+                  <td colspan="6">Carregando histórico...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+    </main>
 
-        <!-- =================================================================
+    <!-- =================================================================
          04. ALERTAS
          ================================================================= -->
-        <main id="alertas-page" class="page">
-            <header>
-                <div>
-                    <h1>Alertas</h1>
-                    <p>Acompanhamento dos alertas emitidos pelo sistema</p>
-                </div>
-            </header>
+    <main id="alertas-page" class="page">
+      <header>
+        <div>
+          <h1>Alertas</h1>
+          <p>Acompanhamento dos alertas emitidos pelo sistema</p>
+        </div>
+      </header>
 
-            <section class="page-grid">
-                <article class="card">
-                    <h3>ALERTAS E HISTÓRICO DO SISTEMA</h3>
+      <section class="page-grid">
+        <article class="card">
+          <h3>ALERTAS E HISTÓRICO DO SISTEMA</h3>
 
-                    <div id="listaAlertas">
-                        <p>Carregando alertas...</p>
-                    </div>
-                </article>
-            </section>
-        </main>
+          <div id="listaAlertas">
+            <p>Carregando alertas...</p>
+          </div>
+        </article>
+      </section>
+    </main>
 
-        <!-- =================================================================
+    <!-- =================================================================
          05. CONFIGURAÇÕES
          ================================================================= -->
-        <main id="configuracoes" class="page">
-            <header>
-                <div>
-                    <h1>Configurações</h1>
-                    <p>Parâmetros de funcionamento do AquaLevel</p>
-                </div>
-            </header>
+    <main id="configuracoes" class="page">
+      <header>
+        <div>
+          <h1>Configurações</h1>
+          <p>Parâmetros de funcionamento do AquaLevel</p>
+        </div>
+      </header>
 
-            <section class="config-grid">
-                <!-- Limites e banda exibidos sem edição nesta página. -->
-                <article class="card">
-                    <h3>LIMITES DO RESERVATÓRIO</h3>
+      <section class="config-grid">
+        <!-- Limites e banda exibidos sem edição nesta página. -->
+        <article class="card">
+          <h3>LIMITES DO RESERVATÓRIO</h3>
 
-                    <div class="config-item">
-                        <label>Nível mínimo</label>
-                        <p>
-                            Define o nível para acionamento automático da bomba.
-                        </p>
-                        <strong id="minimoConfiguracao">--%</strong>
-                    </div>
+          <div class="config-item">
+            <label>Nível mínimo</label>
+            <p>Define o nível para acionamento automático da bomba.</p>
+            <strong id="minimoConfiguracao">--%</strong>
+          </div>
 
-                    <div class="config-item">
-                        <label>Nível máximo</label>
-                        <p>
-                            Define o nível para desligamento automático da
-                            bomba.
-                        </p>
-                        <strong id="maximoConfiguracao">--%</strong>
-                    </div>
+          <div class="config-item">
+            <label>Nível máximo</label>
+            <p>Define o nível para desligamento automático da bomba.</p>
+            <strong id="maximoConfiguracao">--%</strong>
+          </div>
 
-                    <div class="config-item">
-                        <label>Banda de operação</label>
-                        <p>
-                            Diferença entre nível mínimo e máximo. É a faixa
-                            onde a bomba mantém seu estado, evitando
-                            acionamentos repetidos.
-                        </p>
-                        <strong id="bandaConfiguracao">--%</strong>
-                    </div>
-                </article>
+          <div class="config-item">
+            <label>Banda de operação</label>
+            <p>
+              Diferença entre nível mínimo e máximo. É a faixa onde a bomba mantém seu estado,
+              evitando acionamentos repetidos.
+            </p>
+            <strong id="bandaConfiguracao">--%</strong>
+          </div>
+        </article>
 
-                <article class="card">
-                    <h3>MODO DE FUNCIONAMENTO</h3>
+        <article class="card">
+          <h3>MODO DE FUNCIONAMENTO</h3>
 
-                    <div class="config-item">
-                        <label>Modo atual</label>
-                        <p>
-                            Controle automático de acordo com os limites
-                            configurados.
-                        </p>
-                        <strong id="modoConfiguracao"> Carregando... </strong>
-                    </div>
-                </article>
-            </section>
-        </main>
+          <div class="config-item">
+            <label>Modo atual</label>
+            <p>Controle automático de acordo com os limites configurados.</p>
+            <strong id="modoConfiguracao"> Carregando... </strong>
+          </div>
+        </article>
+      </section>
+    </main>
 
-        <!-- =================================================================
+    <!-- =================================================================
          06. RELATÓRIOS
          ================================================================= -->
-        <main id="relatorios" class="page">
-            <header>
-                <div>
-                    <h1>Relatórios</h1>
-                    <p>Resumo das informações registradas pelo sistema</p>
-                </div>
-            </header>
+    <main id="relatorios" class="page">
+      <header>
+        <div>
+          <h1>Relatórios</h1>
+          <p>Resumo das informações registradas pelo sistema</p>
+        </div>
+      </header>
 
-            <section class="report-grid">
-                <article class="card report-card">
-                    <span>Nível médio</span>
-                    <strong id="reportNivelMedio">--</strong>
-                    <p>Média das medições registradas</p>
-                </article>
+      <section class="report-grid">
+        <article class="card report-card">
+          <span>Nível médio</span>
+          <strong id="reportNivelMedio">--</strong>
+          <p>Média das medições registradas</p>
+        </article>
 
-                <article class="card report-card">
-                    <span>Nível máximo</span>
-                    <strong id="reportNivelMaximo">--</strong>
-                    <p>Maior nível registrado</p>
-                </article>
+        <article class="card report-card">
+          <span>Nível máximo</span>
+          <strong id="reportNivelMaximo">--</strong>
+          <p>Maior nível registrado</p>
+        </article>
 
-                <article class="card report-card">
-                    <span>Nível mínimo</span>
-                    <strong id="reportNivelMinimo">--</strong>
-                    <p>Menor nível registrado</p>
-                </article>
+        <article class="card report-card">
+          <span>Nível mínimo</span>
+          <strong id="reportNivelMinimo">--</strong>
+          <p>Menor nível registrado</p>
+        </article>
 
-                <article class="card report-card">
-                    <span>Acionamentos</span>
-                    <strong id="reportAcionamentos">--</strong>
-                    <p>Acionamentos da bomba registrados</p>
-                </article>
-            </section>
-        </main>
+        <article class="card report-card">
+          <span>Acionamentos</span>
+          <strong id="reportAcionamentos">--</strong>
+          <p>Acionamentos da bomba registrados</p>
+        </article>
+      </section>
+    </main>
 
-        <!-- =================================================================
+    <!-- =================================================================
          07. SOBRE O PROJETO
          ================================================================= -->
-        <main id="sobre" class="page">
-            <header>
-                <div>
-                    <h1>Sobre</h1>
-                    <p>Informações sobre o sistema AquaLevel</p>
-                </div>
-            </header>
+    <main id="sobre" class="page">
+      <header>
+        <div>
+          <h1>Sobre</h1>
+          <p>Informações sobre o sistema AquaLevel</p>
+        </div>
+      </header>
 
-            <section class="sobre-grid">
-                <article class="card">
-                    <h3>AQUALEVEL</h3>
+      <section class="sobre-grid">
+        <article class="card">
+          <h3>AQUALEVEL</h3>
 
-                    <h2>
-                        Automação e Controle Inteligente de Reservatórios de
-                        Água
-                    </h2>
+          <h2>Automação e Controle Inteligente de Reservatórios de Água</h2>
 
-                    <p class="sobre-texto">
-                        O AquaLevel é um sistema embarcado inteligente
-                        desenvolvido para monitorar e controlar automaticamente
-                        o nível de água em reservatórios.
-                    </p>
+          <p class="sobre-texto">
+            O AquaLevel é um sistema embarcado inteligente desenvolvido para monitorar e controlar
+            automaticamente o nível de água em reservatórios.
+          </p>
 
-                    <!-- Tecnologias e capacidades principais da solução. -->
-                    <div class="sobre-info">
-                        <div>
-                            <strong>ESP32</strong>
-                            <span>
-                                Microcontrolador responsável pelo processamento
-                                e comunicação Wi-Fi.
-                            </span>
-                        </div>
+          <!-- Tecnologias e capacidades principais da solução. -->
+          <div class="sobre-info">
+            <div>
+              <strong>ESP32</strong>
+              <span> Microcontrolador responsável pelo processamento e comunicação Wi-Fi. </span>
+            </div>
 
-                        <div>
-                            <strong>HC-SR04</strong>
-                            <span>
-                                Sensor ultrassônico utilizado para monitoramento
-                                do nível da água.
-                            </span>
-                        </div>
+            <div>
+              <strong>HC-SR04</strong>
+              <span> Sensor ultrassônico utilizado para monitoramento do nível da água. </span>
+            </div>
 
-                        <div>
-                            <strong>Controle automático</strong>
-                            <span>
-                                Aciona e desliga a bomba conforme os limites
-                                configurados.
-                            </span>
-                        </div>
+            <div>
+              <strong>Controle automático</strong>
+              <span> Aciona e desliga a bomba conforme os limites configurados. </span>
+            </div>
 
-                        <div>
-                            <strong>Dashboard Web</strong>
-                            <span>
-                                Permite acompanhar nível, bomba, alertas e
-                                histórico.
-                            </span>
-                        </div>
-                    </div>
-                </article>
-            </section>
-        </main>
+            <div>
+              <strong>Dashboard Web</strong>
+              <span> Permite acompanhar nível, bomba, alertas e histórico. </span>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
 
-        <script src="script.js"></script>
-    </body>
+    <script src="script.js"></script>
+  </body>
 </html>

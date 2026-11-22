@@ -101,9 +101,7 @@ function aplicarAcessibilidade() {
   document.body.classList.toggle("alto-contraste", contrasteAtivo);
 
   alternarContraste.setAttribute("aria-pressed", String(contrasteAtivo));
-
   alternarContraste.classList.toggle("ativo", contrasteAtivo);
-
   alternarContraste.title = contrasteAtivo ? "Desativar alto contraste" : "Ativar alto contraste";
 }
 
@@ -198,6 +196,7 @@ function atualizarIndicadorConexao(estado) {
     ? INDICADORES_CONEXAO[estado]
     : INDICADORES_CONEXAO.servidor_offline;
   const [texto, cor, detalhe] = indicador;
+
   wifi.textContent = texto;
   wifi.style.color = cor;
 
@@ -222,7 +221,6 @@ function atualizarReservatorio() {
     capacidadeEl.textContent =
       capacidadeLitrosConhecida !== null ? capacidadeLitrosConhecida + " litros" : "-- litros";
   }
-
   /* A altura da água é proporcional ao curso útil do sensor, sem GAP. */
   if (alturaEl) {
     alturaEl.textContent = ((nivel / 100) * ALTURA_UTIL_CM).toFixed(1) + " cm";
@@ -281,9 +279,7 @@ function atualizarModo() {
   if (acionamentoBomba) {
     acionamentoBomba.textContent = modo === "automatico" ? "Automático" : "Manual";
   }
-
   /* Atualiza também os valores informativos em Configurações. */
-
   if (minimoConfiguracao) {
     minimoConfiguracao.textContent = minimo + "%";
   }
@@ -308,7 +304,6 @@ function atualizarLimitesEControles() {
   if (bandaConfiguracao) {
     bandaConfiguracao.textContent = Math.round(banda) + "%";
   }
-
   // O rascunho é independente do foco: polling não apaga alterações.
   if (!limitesEmEdicao) {
     inputMin.value = minimo;
@@ -323,6 +318,7 @@ function atualizarLimitesEControles() {
 
   const controlesModoBloqueados =
     alteracaoModoEmAndamento || ligamentoEmAndamento || desligamentoEmAndamento;
+
   btnAutomatico.disabled = controlesModoBloqueados;
   btnManual.disabled = controlesModoBloqueados;
 
@@ -491,6 +487,7 @@ async function solicitarBomba(ligar) {
       alert(
         `Não foi possível confirmar o pedido de ${ligar ? "ligar" : "desligar"}. A operação pode ter chegado ao servidor. Consulte o estado da bomba antes de tentar novamente.`,
       );
+
       void buscarDados();
     }
   } finally {
@@ -673,7 +670,6 @@ async function atualizarGrafico() {
     }
 
     const historico = await resposta.json();
-
     const registros = historico.slice(-20);
 
     const horarios = registros.map((registro) => {
@@ -708,9 +704,11 @@ let consultaStatusEmAndamento = null;
 function buscarDados() {
   if (consultaStatusEmAndamento) return consultaStatusEmAndamento;
   const revisaoNoInicio = revisaoEstadoLocal;
+
   const consulta = (async () => {
     try {
       const { resposta, dados } = await requisitarJSON("/api/status");
+
       if (revisaoNoInicio !== revisaoEstadoLocal) return;
       if (!resposta.ok) throw new Error("Erro ao buscar dados.");
 
@@ -725,6 +723,7 @@ function buscarDados() {
       if (sensorBanner) {
         const falhaSensor = dados.sensorOK === false;
         const esp32Desconectado = dados.esp32Online === false;
+
         sensorBanner.classList.toggle("hidden", !falhaSensor && !esp32Desconectado);
         sensorBanner.textContent = esp32Desconectado
           ? "ESP32 sem comunicação. Estado da bomba não confirmado."
@@ -737,6 +736,7 @@ function buscarDados() {
       atualizarDashboard();
     } catch (erro) {
       if (revisaoNoInicio !== revisaoEstadoLocal) return;
+
       console.error("Erro de comunicação:", erro);
       esp32Online = false;
       bombaConfirmada = null;
@@ -744,10 +744,13 @@ function buscarDados() {
       atualizarDashboard();
     }
   })();
+
   consultaStatusEmAndamento = consulta;
+
   void consulta.finally(() => {
     if (consultaStatusEmAndamento === consulta) consultaStatusEmAndamento = null;
   });
+
   return consulta;
 }
 
@@ -757,13 +760,9 @@ function buscarDados() {
 
 setInterval(() => {
   buscarDados();
-
   atualizarGrafico();
-
   buscarUltimosEventos();
-
   buscarEstatisticas();
-
   buscarAlertas();
 }, 5000);
 
@@ -915,9 +914,7 @@ async function buscarAlertas() {
       fetch("/api/alertas"),
     ]);
 
-    if (!respostaAtivos.ok || !respostaHistorico.ok) {
-      throw new Error("Erro ao buscar alertas.");
-    }
+    if (!respostaAtivos.ok || !respostaHistorico.ok) throw new Error("Erro ao buscar alertas.");
 
     const alertasAtivos = await respostaAtivos.json();
     const historicoAlertas = await respostaHistorico.json();
@@ -949,6 +946,7 @@ async function buscarAlertas() {
     }
   } catch (erro) {
     console.error("Erro ao carregar alertas:", erro);
+
     if (listaAlertas) listaAlertas.innerHTML = "<p>Erro ao carregar os alertas.</p>";
     if (alertasDashboard) alertasDashboard.innerHTML = "<p>Erro ao carregar os alertas.</p>";
   }
@@ -962,9 +960,7 @@ buscarAlertas();
 
 function criarEventoBombaHTML(evento) {
   const { data, hora } = formatarDataHora(evento.dataHora);
-
   const estado = evento.estado === "ligada" ? "Bomba ligada" : "Bomba desligada";
-
   const icone = evento.estado === "ligada" ? "▶" : "■";
 
   const modoEvento =
@@ -983,16 +979,12 @@ function criarEventoBombaHTML(evento) {
 }
 
 async function buscarUltimosEventos() {
-  if (!eventosDashboard) {
-    return;
-  }
+  if (!eventosDashboard) return;
 
   try {
     const resposta = await fetch("/api/historico-bomba");
 
-    if (!resposta.ok) {
-      throw new Error("Erro ao buscar histórico da bomba.");
-    }
+    if (!resposta.ok) throw new Error("Erro ao buscar histórico da bomba.");
 
     const historicoBomba = await resposta.json();
 
@@ -1000,7 +992,6 @@ async function buscarUltimosEventos() {
 
     if (historicoBomba.length === 0) {
       eventosDashboard.innerHTML = "<p>Nenhum acionamento da bomba registrado.</p>";
-
       return;
     }
 
