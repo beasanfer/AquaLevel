@@ -10,6 +10,7 @@ node_modules/
 # Variáveis de ambiente
 .env
 estado.json
+hardware/teste/funcionalidade/remoto/conexao/temporario/
 
 # PlatformIO
 .pio/

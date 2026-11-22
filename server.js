@@ -112,6 +112,7 @@ const estadoPadraoSistema = {
   nivel: 0,
   litros: 0,
   alturaCm: 0,
+  gapSensorCm: null,
   capacidadeLitros: 0,
   // bombaLigada preserva o último estado comunicado (para o histórico).
   bombaLigada: false,
@@ -123,8 +124,9 @@ const estadoPadraoSistema = {
   bloqueioManual: false,
   ultimaMensagemDataHora: null,
   modo: "automatico",
-  minimo: 30,
-  maximo: 90,
+  minimo: null,
+  maximo: null,
+  limitesConfigurados: false,
   sensorOK: true,
   ultimaLeituraDataHora: null,
 };
@@ -143,6 +145,30 @@ let ultimaLeituraRecebida = Date.now();
 // Não persistimos comandos: reiniciar o servidor nunca deve religar a bomba.
 let comandoManualPendente = null;
 let ultimaSessaoESP32 = null;
+// Oculta os limites ate a primeira telemetria valida nesta execucao.
+// Os valores personalizados continuam persistidos e sao preservados.
+let limitesSincronizados = false;
+
+function limitesValidos(minimo, maximo) {
+  return (
+    typeof minimo === "number" &&
+    Number.isFinite(minimo) &&
+    typeof maximo === "number" &&
+    Number.isFinite(maximo) &&
+    minimo >= 1 &&
+    minimo < maximo &&
+    maximo <= LIMITE_SEGURANCA_MANUAL - 1
+  );
+}
+
+function estadoParaInterface() {
+  return {
+    ...sistema,
+    minimo: limitesSincronizados ? sistema.minimo : null,
+    maximo: limitesSincronizados ? sistema.maximo : null,
+    limitesDisponiveis: limitesSincronizados,
+  };
+}
 
 // ===========================================================================
 // 04. Restauração do estado
@@ -161,19 +187,22 @@ function carregarEstado() {
 
     sistema = { ...estadoPadraoSistema, ...novoSistema };
 
-    /* Migra limites antigos: mínimo >= 1%, máximo <= 97% e mínimo
-     * estritamente menor que o máximo. Nunca restaura mínimo 0%. */
-    const maximoSalvo = Number(sistema.maximo);
-    const minimoSalvo = Number(sistema.minimo);
+    /* Preserva limites personalizados entre reinicios. Arquivos legados
+     * so sao migrados como configurados se diferirem dos antigos padroes.
+     * Sem limites salvos, o primeiro POST valido deve importa-los do ESP32. */
+    const minimoSalvo = Number(novoSistema.minimo);
+    const maximoSalvo = Number(novoSistema.maximo);
+    const possuiLimitesSalvos = limitesValidos(minimoSalvo, maximoSalvo);
+    const limitesLegadosPersonalizados =
+      novoSistema.limitesConfigurados === undefined &&
+      possuiLimitesSalvos &&
+      (minimoSalvo !== 30 || maximoSalvo !== 90);
 
-    sistema.maximo =
-      Number.isFinite(maximoSalvo) && maximoSalvo > 1
-        ? Math.min(maximoSalvo, LIMITE_SEGURANCA_MANUAL - 1)
-        : estadoPadraoSistema.maximo;
-    sistema.minimo =
-      Number.isFinite(minimoSalvo) && minimoSalvo >= 1
-        ? Math.min(minimoSalvo, sistema.maximo - 1)
-        : 1;
+    sistema.limitesConfigurados =
+      possuiLimitesSalvos &&
+      (novoSistema.limitesConfigurados === true || limitesLegadosPersonalizados);
+    sistema.minimo = sistema.limitesConfigurados ? minimoSalvo : null;
+    sistema.maximo = sistema.limitesConfigurados ? maximoSalvo : null;
 
     // A última leitura é histórica, não uma confirmação física presente.
     sistema.bombaLigada = sistema.bombaLigada === true;
@@ -296,6 +325,8 @@ function resolverAlerta(tipo) {
 // O nível só é crítico abaixo do mínimo; ao voltar à faixa normal,
 // o alerta ativo é resolvido. O comparador < coincide com firmware e UI.
 function verificarNivelCritico() {
+  if (!limitesSincronizados || !sistema.sensorOK) return;
+
   if (sistema.nivel >= sistema.minimo) {
     nivelCriticoAtivo = false;
     resolverAlerta("nivel_critico");
@@ -388,6 +419,30 @@ function registrarEcoDaBomba(corpo) {
   }
 }
 
+// A geometria é propriedade do ESP32. Dados incompletos não são confirmados.
+function parametrosReservatorioValidos(altura, gap, capacidade) {
+  return (
+    typeof altura === "number" &&
+    Number.isFinite(altura) &&
+    altura > 0 &&
+    typeof gap === "number" &&
+    Number.isFinite(gap) &&
+    gap >= 0 &&
+    gap < altura &&
+    typeof capacidade === "number" &&
+    Number.isFinite(capacidade) &&
+    capacidade > 0
+  );
+}
+
+function solicitarParametrosReservatorio() {
+  return !parametrosReservatorioValidos(
+    sistema.alturaCm,
+    sistema.gapSensorCm,
+    sistema.capacidadeLitros,
+  );
+}
+
 // Campos retornados ao firmware, inclusive quando o sensor falha.
 function configuracaoParaESP32() {
   return {
@@ -432,8 +487,51 @@ app.post("/api/nivel", (req, res) => {
       .json({ sucesso: false, erro: "Leitura inválida do sensor.", ...configuracaoParaESP32() });
   }
 
+  // A configuração física é enviada no boot/reconexão, em um único POST.
+  // Clientes legados podem continuar enviando somente telemetria.
+  const possuiGap = Object.hasOwn(corpo, "gapSensorCm");
+  const recebeuParametros =
+    possuiGap && Object.hasOwn(corpo, "alturaCm") && Object.hasOwn(corpo, "capacidadeLitros");
+
+  if (
+    (possuiGap && !recebeuParametros) ||
+    (recebeuParametros &&
+      !parametrosReservatorioValidos(corpo.alturaCm, corpo.gapSensorCm, corpo.capacidadeLitros))
+  ) {
+    return res.status(400).json({
+      sucesso: false,
+      erro: "Parâmetros físicos do reservatório inválidos ou incompletos.",
+      ...configuracaoParaESP32(),
+    });
+  }
+
+  // O primeiro registro dos limites vem do ESP32, nunca do estado padrao
+  // do servidor. Rejeita campos ausentes ou invalidos antes do heartbeat.
+  if (!sistema.limitesConfigurados) {
+    if (!limitesValidos(corpo.minimoInicial, corpo.maximoInicial)) {
+      return res.status(400).json({
+        sucesso: false,
+        erro: "Limites iniciais do ESP32 ausentes ou invalidos.",
+      });
+    }
+
+    sistema.minimo = corpo.minimoInicial;
+    sistema.maximo = corpo.maximoInicial;
+    sistema.limitesConfigurados = true;
+    salvarEstadoAgora();
+  }
+
+  limitesSincronizados = true;
   registrarHeartbeat(corpo);
   registrarEcoDaBomba(corpo);
+
+  if (recebeuParametros) {
+    sistema.alturaCm = corpo.alturaCm;
+    sistema.gapSensorCm = corpo.gapSensorCm;
+    sistema.capacidadeLitros = corpo.capacidadeLitros;
+    // Persiste imediatamente: um reinício do Node.js não perde a geometria.
+    salvarEstadoAgora();
+  }
 
   if (falhaSensor) {
     sistema.sensorOK = false;
@@ -447,6 +545,8 @@ app.post("/api/nivel", (req, res) => {
       erro: "Falha na leitura do sensor.",
       ...configuracaoParaESP32(),
       comandoManual: null,
+      parametrosRecebidos: recebeuParametros,
+      solicitarParametros: solicitarParametrosReservatorio(),
     });
   }
 
@@ -458,13 +558,13 @@ app.post("/api/nivel", (req, res) => {
   sistema.nivel = nivel;
   sistema.litros = litros;
 
-  // Campos opcionais mantidos por compatibilidade: o firmware não os envia.
-  if (corpo.alturaCm !== undefined) {
+  // Campos legados opcionais continuam aceitos se não houver registro completo.
+  if (!recebeuParametros && corpo.alturaCm !== undefined) {
     const alturaBruta = Number(corpo.alturaCm);
 
     if (Number.isFinite(alturaBruta) && alturaBruta >= 0) sistema.alturaCm = alturaBruta;
   }
-  if (corpo.capacidadeLitros !== undefined) {
+  if (!recebeuParametros && corpo.capacidadeLitros !== undefined) {
     const capacidadeBruta = Number(corpo.capacidadeLitros);
 
     if (Number.isFinite(capacidadeBruta) && capacidadeBruta > 0)
@@ -523,7 +623,13 @@ app.post("/api/nivel", (req, res) => {
       ? { id: comandoManualPendente.id, ligar: comandoManualPendente.ligar }
       : null;
 
-  res.json({ sucesso: true, ...configuracaoParaESP32(), comandoManual });
+  res.json({
+    sucesso: true,
+    ...configuracaoParaESP32(),
+    comandoManual,
+    parametrosRecebidos: recebeuParametros,
+    solicitarParametros: solicitarParametrosReservatorio(),
+  });
 });
 
 // ===========================================================================
@@ -540,15 +646,15 @@ app.get("/api/comando", (req, res) => {
     bombaDesejada: sistema.bombaDesejada,
     comandoPendente: sistema.comandoPendente,
     modo: sistema.modo,
-    minimo: sistema.minimo,
-    maximo: sistema.maximo,
+    minimo: limitesSincronizados ? sistema.minimo : null,
+    maximo: limitesSincronizados ? sistema.maximo : null,
   });
 });
 
 app.get("/api/status", (req, res) => {
   expirarComandoManual();
   verificarWatchdog();
-  res.json(sistema);
+  res.json(estadoParaInterface());
 });
 
 // Expõe apenas as últimas HISTORICO_RESPOSTA medições.
@@ -640,6 +746,9 @@ app.post("/api/bomba", (req, res) => {
     });
   }
 
+  if (corpo.ligar && !limitesSincronizados)
+    return res.status(409).json({ erro: "Aguardando limites iniciais do ESP32." });
+
   if (corpo.ligar && sistema.nivel >= sistema.maximo)
     return res.status(400).json({ erro: "Limite máximo atingido." });
 
@@ -659,7 +768,7 @@ app.post("/api/bomba", (req, res) => {
   // Eles serão atualizados no próximo POST com o eco do ESP32.
   criarComandoManual(corpo.ligar);
   salvarEstadoAgora();
-  res.json(sistema);
+  res.json(estadoParaInterface());
 });
 
 app.post("/api/modo", (req, res) => {
@@ -685,13 +794,16 @@ app.post("/api/modo", (req, res) => {
     salvarEstadoAgora();
   }
 
-  res.json(sistema);
+  res.json(estadoParaInterface());
 });
 
 app.post("/api/limites", (req, res) => {
   const corpo = obterCorpoJSON(req);
   const minimo = corpo.minimo;
   const maximo = corpo.maximo;
+
+  if (!limitesSincronizados)
+    return res.status(409).json({ erro: "Aguardando limites iniciais do ESP32." });
 
   // Limites precisam ser números JSON reais: mínimo >= 1%, mínimo < máximo.
   if (
@@ -722,7 +834,7 @@ app.post("/api/limites", (req, res) => {
 
   salvarEstadoAgora();
   verificarNivelCritico();
-  res.json(sistema);
+  res.json(estadoParaInterface());
 });
 
 // ===========================================================================

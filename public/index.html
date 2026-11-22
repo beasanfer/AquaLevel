@@ -194,7 +194,7 @@
           <div class="limits">
             <div>
               <label>Nível mínimo</label>
-              <h2><span id="minValue">30</span>%</h2>
+              <h2><span id="minValue">--</span>%</h2>
 
               <input
                 id="minimo"
@@ -202,6 +202,7 @@
                 min="1"
                 max="96"
                 value="30"
+                disabled
                 aria-label="Nível mínimo"
               />
             </div>
@@ -209,12 +210,12 @@
             <!-- Banda de histerese: máximo - mínimo. -->
             <div>
               <label>Banda de operação</label>
-              <h2><span id="bandaValue">60</span>%</h2>
+              <h2><span id="bandaValue">--</span>%</h2>
             </div>
 
             <div>
               <label>Nível máximo</label>
-              <h2><span id="maxValue">90</span>%</h2>
+              <h2><span id="maxValue">--</span>%</h2>
 
               <!-- O máximo permitido é 97%; o corte de segurança acontece em 98%. -->
               <input
@@ -223,13 +224,16 @@
                 min="2"
                 max="97"
                 value="90"
+                disabled
                 aria-label="Nível máximo"
               />
             </div>
           </div>
 
           <div class="botoes-limites">
-            <button id="salvarLimites" class="btn salvar" type="button">Salvar limites</button>
+            <button id="salvarLimites" class="btn salvar" type="button" disabled>
+              Salvar limites
+            </button>
             <button id="cancelarLimites" class="btn cancelar" type="button" disabled>
               Cancelar edição
             </button>

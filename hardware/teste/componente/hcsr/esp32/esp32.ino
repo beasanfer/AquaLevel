@@ -1,112 +1,91 @@
-#include <Arduino.h>
-#include <algorithm>
 
-/* ==================== PINOS ==================== */
+#define TRIG_PIN 13
+#define ECHO_PIN 35
 
-#define PINO_TRIG  13
-#define PINO_ECHO  35  // input-only no ESP32, exige divisor de tensão
+#define NUM_AMOSTRAS 7
+#define INTERVALO 1000
 
-/* ==================== CONFIGURAÇÃO ==================== */
+unsigned long ultimoTempo = 0;
 
-// Reservatório: distância do sensor (cm) para 0% e 100%
-float ALTURA_RESERVATORIO_CM = 22.5f;  // fundo -> sensor
-float NIVEL_DESEJADO_CM      = 5.0f;   // fundo -> nível desejado
-
-// Filtro e cadência de leitura
-const int NUMERO_AMOSTRAS = 7;          // ímpar; quanto maior, mais estável
-const unsigned long INTERVALO_LEITURA_MS = 1000UL;
-
-/* ==================== MEDIÇÃO ==================== */
-
-unsigned long timeoutPulseIn() {
-  return 30000UL;  // 30 ms
-}
-
-// Faz uma leitura crua do HC-SR04
-float lerDistanciaCrua() {
-  digitalWrite(PINO_TRIG, LOW);
+// Realiza uma medição de distância em centímetros
+float medirDistancia() {
+  digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(2);
-  digitalWrite(PINO_TRIG, HIGH);
+
+  digitalWrite(TRIG_PIN, HIGH);
   delayMicroseconds(10);
-  digitalWrite(PINO_TRIG, LOW);
+  digitalWrite(TRIG_PIN, LOW);
 
-  unsigned long duracao = pulseIn(PINO_ECHO, HIGH, timeoutPulseIn());
-  if (duracao == 0) return -1.0;
+  unsigned long duracao = pulseIn(ECHO_PIN, HIGH, 30000);
 
-  // velocidade do som: 0,0343 cm/us a 20°C; divide por 2 (ida e volta)
+  if (duracao == 0) {
+    return -1;  // Leitura inválida
+  }
+
   return (duracao * 0.0343) / 2.0;
 }
 
-// Tira várias amostras e devolve a mediana, descartando leituras inválidas
-float lerDistanciaFiltrada() {
-  float leituras[NUMERO_AMOSTRAS];
+// Calcula a mediana de 7 amostras
+float calcularMediana() {
+  float amostras[NUM_AMOSTRAS];
   int validas = 0;
 
-  for (int i = 0; i < NUMERO_AMOSTRAS; i++) {
-    float d = lerDistanciaCrua();
+  // Coleta 7 amostras válidas, no máximo 7 tentativas
+  for (int i = 0; i < NUM_AMOSTRAS; i++) {
+    float distancia = medirDistancia();
 
-    if (d > 0) {
-      leituras[validas] = d;
-      ++validas;
+    if (distancia >= 0) {
+      amostras[validas++] = distancia;
     }
 
-    if (i < NUMERO_AMOSTRAS - 1) delay(60);
+    delay(60);
   }
 
-  if (validas == 0) return -1.0;
+  if (validas == 0) {
+    return -1;
+  }
 
-  std::sort(leituras, leituras + validas);
-  return leituras[validas / 2];
+  // Ordenação crescente
+  for (int i = 0; i < validas - 1; i++) {
+    for (int j = i + 1; j < validas; j++) {
+      if (amostras[i] > amostras[j]) {
+        float temp = amostras[i];
+        amostras[i] = amostras[j];
+        amostras[j] = temp;
+      }
+    }
+  }
+
+  // Retorna a mediana
+  if (validas % 2 == 1) {
+    return amostras[validas / 2];
+  }
+
+  return (amostras[validas / 2 - 1] +
+          amostras[validas / 2]) / 2.0;
 }
-
-// Converte distância (cm) em nível (%), com os limites da configuração
-float distanciaParaNivel(float distancia) {
-  if (distancia < 0) return -1.0;
-
-  float nivel =
-    (ALTURA_RESERVATORIO_CM - distancia) / NIVEL_DESEJADO_CM * 100.0;
-
-  if (nivel < 0)   nivel = 0;
-  if (nivel > 100) nivel = 100;
-
-  return nivel;
-}
-
-/* ==================== SETUP ==================== */
 
 void setup() {
-  Serial.begin(9600);
-  delay(1000);
+  Serial.begin(115200);
 
-  pinMode(PINO_TRIG, OUTPUT);
-  pinMode(PINO_ECHO, INPUT);
-  digitalWrite(PINO_TRIG, LOW);
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
 
-  Serial.println("Leitura HC-SR04 iniciada.");
+  digitalWrite(TRIG_PIN, LOW);
 }
 
-/* ==================== LOOP ==================== */
-
 void loop() {
-  static unsigned long tempoUltimaLeitura = 0;
+  if (millis() - ultimoTempo >= INTERVALO) {
+    ultimoTempo = millis();
 
-  if (millis() - tempoUltimaLeitura < INTERVALO_LEITURA_MS) {
-    delay(1);  // evita watchdog
-    return;
+    float mediana = calcularMediana();
+
+    if (mediana < 0) {
+      Serial.println("Sem leituras validas");
+    } else {
+      Serial.print("Mediana: ");
+      Serial.print(mediana, 2);
+      Serial.println(" cm");
+    }
   }
-  tempoUltimaLeitura = millis();
-
-  float distancia = lerDistanciaFiltrada();
-  float nivel     = distanciaParaNivel(distancia);
-
-  if (distancia < 0) {
-    Serial.println("Falha na leitura do HC-SR04.");
-    return;
-  }
-
-  Serial.print("Distancia: ");
-  Serial.print(distancia, 1);
-  Serial.print(" cm | Nivel: ");
-  Serial.print(nivel, 1);
-  Serial.println(" %");
 }

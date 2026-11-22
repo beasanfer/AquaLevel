@@ -25,19 +25,15 @@ let salvamentoLimitesEmAndamento = false;
 let revisaoEstadoLocal = 0;
 let esp32Online = false;
 let sensorOK = true;
-let minimo = 30;
-let maximo = 90;
+let minimo = null;
+let maximo = null;
 let ultimaMedicaoDataHora = null;
 
 /* GEOMETRIA DO RESERVATÓRIO
- * As distâncias devem acompanhar os valores de base.ino para que
- * a altura exibida seja coerente com o nível calculado pelo firmware. */
-const ALTURA_RESERVATORIO_CM = 23.6;
-const GAP_SENSOR_CM = 5.0;
-const ALTURA_UTIL_CM = ALTURA_RESERVATORIO_CM - GAP_SENSOR_CM;
-
-/* A capacidade é inferida por litros / (nível / 100) quando os dados
- * são positivos. O último valor obtido é preservado ao chegar a zero. */
+ * Os parâmetros são registrados pelo ESP32 e disponibilizados pela API.
+ * Até o primeiro registro válido, não presumimos dimensões físicas. */
+let alturaReservatorioCm = null;
+let gapSensorCm = null;
 let capacidadeLitrosConhecida = null;
 
 // ===========================================================================
@@ -209,21 +205,21 @@ function atualizarIndicadorConexao(estado) {
 
 function atualizarReservatorio() {
   percentual.textContent = nivel + "%";
-  litros.textContent = Math.round(litrosAtual) + " litros";
+  litros.textContent = Math.round(litrosAtual * 1000) + " mL";
   agua.style.height = nivel + "%";
 
-  /* A cada leitura com volume e percentual positivos, recalcula a
-   * capacidade. Fora dessa condição, conserva o último valor conhecido. */
-  if (nivel > 0 && litrosAtual > 0) {
-    capacidadeLitrosConhecida = Math.round((litrosAtual * 100) / nivel);
-  }
+  // Capacidade e altura útil vêm da configuração registrada pelo ESP32.
   if (capacidadeEl) {
     capacidadeEl.textContent =
       capacidadeLitrosConhecida !== null ? capacidadeLitrosConhecida + " litros" : "-- litros";
   }
-  /* A altura da água é proporcional ao curso útil do sensor, sem GAP. */
   if (alturaEl) {
-    alturaEl.textContent = ((nivel / 100) * ALTURA_UTIL_CM).toFixed(1) + " cm";
+    const alturaUtilCm =
+      alturaReservatorioCm !== null && gapSensorCm !== null
+        ? alturaReservatorioCm - gapSensorCm
+        : null;
+    alturaEl.textContent =
+      alturaUtilCm !== null ? ((nivel / 100) * alturaUtilCm).toFixed(1) + " cm" : "-- cm";
   }
 }
 
@@ -257,7 +253,10 @@ function atualizarMedicaoENivel() {
 
   const nivelStatus = document.getElementById("nivelStatus");
 
-  if (nivel < minimo) {
+  if (minimo === null || maximo === null) {
+    nivelStatus.textContent = "Aguardando limites";
+    nivelStatus.parentElement.style.color = "#59677a";
+  } else if (nivel < minimo) {
     nivelStatus.textContent = "Nível crítico";
     nivelStatus.parentElement.style.color = "#c92d2d";
   } else if (nivel >= maximo) {
@@ -281,10 +280,10 @@ function atualizarModo() {
   }
   /* Atualiza também os valores informativos em Configurações. */
   if (minimoConfiguracao) {
-    minimoConfiguracao.textContent = minimo + "%";
+    minimoConfiguracao.textContent = minimo === null ? "--%" : minimo + "%";
   }
   if (maximoConfiguracao) {
-    maximoConfiguracao.textContent = maximo + "%";
+    maximoConfiguracao.textContent = maximo === null ? "--%" : maximo + "%";
   }
   if (modoConfiguracao) {
     modoConfiguracao.textContent = modo === "automatico" ? "Automático" : "Manual";
@@ -294,27 +293,32 @@ function atualizarModo() {
 function atualizarLimitesEControles() {
   /* Histerese automática: liga abaixo do mínimo, desliga acima do
    * máximo e mantém o estado na faixa entre os dois limiares. */
-  const banda = limitesEmEdicao
-    ? Math.max(0, limitesRascunho.maximo - limitesRascunho.minimo)
-    : Math.max(0, maximo - minimo);
+  const limitesDisponiveis = minimo !== null && maximo !== null;
+  const banda = !limitesDisponiveis
+    ? null
+    : limitesEmEdicao
+      ? Math.max(0, limitesRascunho.maximo - limitesRascunho.minimo)
+      : Math.max(0, maximo - minimo);
 
   if (bandaValue) {
-    bandaValue.textContent = Math.round(banda);
+    bandaValue.textContent = banda === null ? "--" : Math.round(banda);
   }
   if (bandaConfiguracao) {
-    bandaConfiguracao.textContent = Math.round(banda) + "%";
+    bandaConfiguracao.textContent = banda === null ? "--%" : Math.round(banda) + "%";
   }
   // O rascunho é independente do foco: polling não apaga alterações.
   if (!limitesEmEdicao) {
-    inputMin.value = minimo;
-    inputMax.value = maximo;
-    minValue.textContent = minimo;
-    maxValue.textContent = maximo;
+    if (limitesDisponiveis) {
+      inputMin.value = minimo;
+      inputMax.value = maximo;
+    }
+    minValue.textContent = minimo === null ? "--" : minimo;
+    maxValue.textContent = maximo === null ? "--" : maximo;
   }
   if (cancelarLimites) cancelarLimites.disabled = salvamentoLimitesEmAndamento || !limitesEmEdicao;
-  salvarLimites.disabled = salvamentoLimitesEmAndamento;
-  inputMin.disabled = salvamentoLimitesEmAndamento;
-  inputMax.disabled = salvamentoLimitesEmAndamento;
+  salvarLimites.disabled = salvamentoLimitesEmAndamento || !limitesDisponiveis;
+  inputMin.disabled = salvamentoLimitesEmAndamento || !limitesDisponiveis;
+  inputMax.disabled = salvamentoLimitesEmAndamento || !limitesDisponiveis;
 
   const controlesModoBloqueados =
     alteracaoModoEmAndamento || ligamentoEmAndamento || desligamentoEmAndamento;
@@ -322,7 +326,12 @@ function atualizarLimitesEControles() {
   btnAutomatico.disabled = controlesModoBloqueados;
   btnManual.disabled = controlesModoBloqueados;
 
-  ligarBomba.disabled = modo !== "manual" || !esp32Online || !sensorOK || controlesModoBloqueados;
+  ligarBomba.disabled =
+    modo !== "manual" ||
+    !esp32Online ||
+    !sensorOK ||
+    !limitesDisponiveis ||
+    controlesModoBloqueados;
   // Prioridade de segurança: desligar fica disponível enquanto um pedido
   // anterior de ligar ainda aguarda resposta. Não permite OFF duplicado.
   desligarBomba.disabled = modo !== "manual" || alteracaoModoEmAndamento || desligamentoEmAndamento;
@@ -447,6 +456,10 @@ async function solicitarBomba(ligar) {
     alert("Controle disponível somente no modo manual, sem alteração de modo em andamento.");
     return;
   }
+  if (ligar && (minimo === null || maximo === null)) {
+    alert("Aguardando limites iniciais do ESP32.");
+    return;
+  }
   if (ligar && nivel >= maximo) {
     alert("A bomba não pode ser ligada. Limite máximo atingido.");
     return;
@@ -549,6 +562,7 @@ let limitesEmEdicao = false;
 let limitesRascunho = { minimo, maximo };
 
 function atualizarRascunhoLimites() {
+  if (minimo === null || maximo === null) return;
   limitesEmEdicao = true;
 
   limitesRascunho = { minimo: Number(inputMin.value), maximo: Number(inputMax.value) };
@@ -577,7 +591,7 @@ cancelarLimites.addEventListener("click", encerrarEdicaoLimites);
 // ===========================================================================
 
 salvarLimites.addEventListener("click", async () => {
-  if (salvamentoLimitesEmAndamento) return;
+  if (salvamentoLimitesEmAndamento || minimo === null || maximo === null) return;
 
   const novoMinimo = limitesEmEdicao ? limitesRascunho.minimo : minimo;
   const novoMaximo = limitesEmEdicao ? limitesRascunho.maximo : maximo;
@@ -715,6 +729,24 @@ function buscarDados() {
       nivel = dados.nivel;
       ultimaMedicaoDataHora = dados.ultimaLeituraDataHora || null;
       litrosAtual = Number(dados.litros) || 0;
+      alturaReservatorioCm =
+        typeof dados.alturaCm === "number" && Number.isFinite(dados.alturaCm) && dados.alturaCm > 0
+          ? dados.alturaCm
+          : null;
+      gapSensorCm =
+        typeof dados.gapSensorCm === "number" &&
+        Number.isFinite(dados.gapSensorCm) &&
+        dados.gapSensorCm >= 0 &&
+        alturaReservatorioCm !== null &&
+        dados.gapSensorCm < alturaReservatorioCm
+          ? dados.gapSensorCm
+          : null;
+      capacidadeLitrosConhecida =
+        typeof dados.capacidadeLitros === "number" &&
+        Number.isFinite(dados.capacidadeLitros) &&
+        dados.capacidadeLitros > 0
+          ? dados.capacidadeLitros
+          : null;
       aplicarEstadoDaBomba(dados);
       minimo = dados.minimo;
       maximo = dados.maximo;
