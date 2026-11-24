@@ -24,3 +24,4 @@ env/
 ENV/
 __pycache__/
 *.py[cod]
+hardware/teste/funcionalidade/remoto/conexao/temporario/
