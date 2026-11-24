@@ -29,6 +29,12 @@ let minimo = null;
 let maximo = null;
 let ultimaMedicaoDataHora = null;
 
+// Intervalos independentes; não alteram a frequência de leitura do ESP32.
+const INTERVALO_DINAMICO_MS = 2000;
+const INTERVALO_SECUNDARIO_MS = 5000;
+const TIMEOUT_CONSULTA_MS = 15000;
+const consultasEmAndamento = new Map();
+
 /* GEOMETRIA DO RESERVATÓRIO
  * Os parâmetros são registrados pelo ESP32 e disponibilizados pela API.
  * Até o primeiro registro válido, não presumimos dimensões físicas. */
@@ -156,6 +162,8 @@ navLinks.forEach((link) => {
       buscarDados();
     }
     if (pageId === "dashboard") {
+      buscarDados();
+      buscarAlertasAtivos();
       atualizarGrafico();
       buscarUltimosEventos();
       buscarEstatisticas();
@@ -366,37 +374,37 @@ function formatarNumero(valor) {
 // 08. Estatísticas e relatórios
 // ===========================================================================
 
-async function buscarEstatisticas() {
-  try {
-    const resposta = await fetch("/api/estatisticas");
+function buscarEstatisticas() {
+  return consultarUmaVez("estatisticas", async () => {
+    try {
+      const { resposta, dados: stats } = await consultarJSON("/api/estatisticas");
 
-    if (!resposta.ok) {
-      throw new Error("Erro ao buscar estatísticas.");
+      if (!resposta.ok) {
+        throw new Error("Erro ao buscar estatísticas.");
+      }
+
+      const set = (id, valor) => {
+        const el = document.getElementById(id);
+
+        if (el) el.textContent = valor;
+      };
+
+      const indicadores = {
+        statsNivelMedio: formatarPercentual(stats.nivelMedio),
+        statsNivelMaximo: formatarPercentual(stats.nivelMaximo),
+        statsNivelMinimo: formatarPercentual(stats.nivelMinimo),
+        statsConsumo: formatarLitros(stats.consumoEstimado),
+        reportNivelMedio: formatarPercentual(stats.nivelMedio),
+        reportNivelMaximo: formatarPercentual(stats.nivelMaximo),
+        reportNivelMinimo: formatarPercentual(stats.nivelMinimo),
+        reportAcionamentos: formatarNumero(stats.acionamentos),
+      };
+
+      for (const [id, valor] of Object.entries(indicadores)) set(id, valor);
+    } catch (erro) {
+      console.error("Erro ao carregar estatísticas:", erro);
     }
-
-    const stats = await resposta.json();
-
-    const set = (id, valor) => {
-      const el = document.getElementById(id);
-
-      if (el) el.textContent = valor;
-    };
-
-    const indicadores = {
-      statsNivelMedio: formatarPercentual(stats.nivelMedio),
-      statsNivelMaximo: formatarPercentual(stats.nivelMaximo),
-      statsNivelMinimo: formatarPercentual(stats.nivelMinimo),
-      statsConsumo: formatarLitros(stats.consumoEstimado),
-      reportNivelMedio: formatarPercentual(stats.nivelMedio),
-      reportNivelMaximo: formatarPercentual(stats.nivelMaximo),
-      reportNivelMinimo: formatarPercentual(stats.nivelMinimo),
-      reportAcionamentos: formatarNumero(stats.acionamentos),
-    };
-
-    for (const [id, valor] of Object.entries(indicadores)) set(id, valor);
-  } catch (erro) {
-    console.error("Erro ao carregar estatísticas:", erro);
-  }
+  });
 }
 
 // Aplicar a resposta sem transformar o comando desejado em estado confirmado.
@@ -441,6 +449,24 @@ async function requisitarJSON(url, opcoes, timeoutMs = 15000) {
   } finally {
     if (temporizador !== null) clearTimeout(temporizador);
   }
+}
+
+// Cada consulta GET usa o mesmo timeout e evita reutilizar respostas em cache.
+async function consultarJSON(url) {
+  return requisitarJSON(url, { cache: "no-store" }, TIMEOUT_CONSULTA_MS);
+}
+
+// Compartilha a Promise de uma consulta enquanto ela estiver em andamento.
+// Protege tanto o polling quanto as chamadas feitas pela navegação.
+function consultarUmaVez(chave, tarefa) {
+  if (consultasEmAndamento.has(chave)) return consultasEmAndamento.get(chave);
+  const consulta = Promise.resolve()
+    .then(tarefa)
+    .finally(() => {
+      if (consultasEmAndamento.get(chave) === consulta) consultasEmAndamento.delete(chave);
+    });
+  consultasEmAndamento.set(chave, consulta);
+  return consulta;
 }
 
 function opcoesPOST(corpo) {
@@ -675,36 +701,43 @@ const grafico = new Chart(ctx, {
 });
 
 /* Consulta e exibe até 20 registros recentes de nível. */
-async function atualizarGrafico() {
-  try {
-    const resposta = await fetch("/api/historico");
+function atualizarGrafico() {
+  return consultarUmaVez("grafico", async () => {
+    try {
+      const { resposta, dados: historico } = await consultarJSON("/api/historico?limite=20");
 
-    if (!resposta.ok) {
-      throw new Error("Erro ao buscar dados do gráfico.");
-    }
+      if (!resposta.ok) {
+        throw new Error("Erro ao buscar dados do gráfico.");
+      }
 
-    const historico = await resposta.json();
-    const registros = historico.slice(-20);
+      const registros = historico.slice(-20);
 
-    const horarios = registros.map((registro) => {
-      const dataHora = new Date(registro.dataHora);
+      const horarios = registros.map((registro) => {
+        const dataHora = new Date(registro.dataHora);
 
-      return dataHora.toLocaleTimeString("pt-BR", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
+        return dataHora.toLocaleTimeString("pt-BR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
       });
-    });
 
-    const niveis = registros.map((registro) => Number(registro.nivel));
+      const niveis = registros.map((registro) => Number(registro.nivel));
 
-    grafico.data.labels = horarios;
-    grafico.data.datasets[0].data = niveis;
-
-    grafico.update();
-  } catch (erro) {
-    console.error("Erro ao atualizar gráfico:", erro);
-  }
+      // Não redesenha nem reinicia animações se os dados forem iguais.
+      const iguais = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+      if (
+        !iguais(grafico.data.labels, horarios) ||
+        !iguais(grafico.data.datasets[0].data, niveis)
+      ) {
+        grafico.data.labels = horarios;
+        grafico.data.datasets[0].data = niveis;
+        grafico.update("none");
+      }
+    } catch (erro) {
+      console.error("Erro ao atualizar gráfico:", erro);
+    }
+  });
 }
 
 // ===========================================================================
@@ -721,7 +754,7 @@ function buscarDados() {
 
   const consulta = (async () => {
     try {
-      const { resposta, dados } = await requisitarJSON("/api/status");
+      const { resposta, dados } = await consultarJSON("/api/status");
 
       if (revisaoNoInicio !== revisaoEstadoLocal) return;
       if (!resposta.ok) throw new Error("Erro ao buscar dados.");
@@ -790,100 +823,101 @@ function buscarDados() {
 // 13. Atualização periódica de dados
 // ===========================================================================
 
-setInterval(() => {
+function atualizarDadosDinamicos() {
   buscarDados();
   atualizarGrafico();
+  buscarAlertasAtivos();
+}
+
+function atualizarDadosSecundarios() {
   buscarUltimosEventos();
   buscarEstatisticas();
-  buscarAlertas();
-}, 5000);
+  buscarHistoricoAlertas();
+  // Evita reconstruir até 1.000 linhas quando a tabela não está visível.
+  if (document.getElementById("historico")?.classList.contains("active-page")) {
+    buscarHistorico();
+  }
+}
 
-// Primeira carga; as funções declaradas abaixo estão disponíveis por hoisting.
-
-buscarDados();
-atualizarGrafico();
-buscarUltimosEventos();
-buscarEstatisticas();
+// Os temporizadores são iniciados no final, após toda a inicialização.
 
 // ===========================================================================
 // 14. Histórico de medições
 // ===========================================================================
 
-async function buscarHistorico() {
-  if (!tabelaHistorico) {
-    return;
-  }
-
-  try {
-    const resposta = await fetch("/api/historico");
-
-    if (!resposta.ok) {
-      throw new Error("Erro ao buscar histórico.");
-    }
-
-    const historico = await resposta.json();
-
-    tabelaHistorico.innerHTML = "";
-
-    if (historico.length === 0) {
-      tabelaHistorico.innerHTML = `
-                <tr>
-                    <td colspan="6">
-                        Nenhuma medição registrada.
-                    </td>
-                </tr>
-            `;
-
+function buscarHistorico() {
+  return consultarUmaVez("historico", async () => {
+    if (!tabelaHistorico) {
       return;
     }
 
-    historico
-      .slice()
-      .reverse()
-      .forEach((registro) => {
-        const { data, hora } = formatarDataHora(registro.dataHora);
+    try {
+      const { resposta, dados: historico } = await consultarJSON("/api/historico");
 
-        const bombaTexto =
-          registro.bombaLigada === true
-            ? "Ligada"
-            : registro.bombaLigada === false
-              ? "Desligada"
-              : "-";
+      if (!resposta.ok) {
+        throw new Error("Erro ao buscar histórico.");
+      }
 
-        const modoTexto =
-          registro.modo === "automatico"
-            ? "Automático"
-            : registro.modo === "manual"
-              ? "Manual"
-              : "-";
+      tabelaHistorico.innerHTML = "";
 
-        const linha = document.createElement("tr");
+      if (historico.length === 0) {
+        tabelaHistorico.innerHTML = `
+                  <tr>
+                      <td colspan="6">
+                          Nenhuma medição registrada.
+                      </td>
+                  </tr>
+              `;
 
-        linha.innerHTML = `
-                    <td>${data}</td>
-                    <td>${hora}</td>
-                    <td>${registro.nivel}%</td>
-                    <td>${registro.litros} L</td>
-                    <td>${bombaTexto}</td>
-                    <td>${modoTexto}</td>
-                `;
+        return;
+      }
 
-        tabelaHistorico.appendChild(linha);
-      });
-  } catch (erro) {
-    console.error("Erro ao carregar histórico:", erro);
+      historico
+        .slice()
+        .reverse()
+        .forEach((registro) => {
+          const { data, hora } = formatarDataHora(registro.dataHora);
 
-    tabelaHistorico.innerHTML = `
-            <tr>
-                <td colspan="6">
-                    Erro ao carregar o histórico.
-                </td>
-            </tr>
-        `;
-  }
+          const bombaTexto =
+            registro.bombaLigada === true
+              ? "Ligada"
+              : registro.bombaLigada === false
+                ? "Desligada"
+                : "-";
+
+          const modoTexto =
+            registro.modo === "automatico"
+              ? "Automático"
+              : registro.modo === "manual"
+                ? "Manual"
+                : "-";
+
+          const linha = document.createElement("tr");
+
+          linha.innerHTML = `
+                      <td>${data}</td>
+                      <td>${hora}</td>
+                      <td>${registro.nivel}%</td>
+                      <td>${registro.litros} L</td>
+                      <td>${bombaTexto}</td>
+                      <td>${modoTexto}</td>
+                  `;
+
+          tabelaHistorico.appendChild(linha);
+        });
+    } catch (erro) {
+      console.error("Erro ao carregar histórico:", erro);
+
+      tabelaHistorico.innerHTML = `
+              <tr>
+                  <td colspan="6">
+                      Erro ao carregar o histórico.
+                  </td>
+              </tr>
+          `;
+    }
+  });
 }
-
-buscarHistorico();
 
 /* Formatação compartilhada por alertas, eventos e histórico. */
 function formatarDataHora(valor) {
@@ -939,52 +973,81 @@ function renderizarAlertas(alertas, mostrarData) {
     .join("");
 }
 
-async function buscarAlertas() {
-  try {
-    const [respostaAtivos, respostaHistorico] = await Promise.all([
-      fetch("/api/alertas/ativos"),
-      fetch("/api/alertas"),
-    ]);
+// Cada conjunto de alertas possui estado e consulta independentes.
+// Uma falha no histórico não impede a exibição dos alertas ativos.
+let estadoAlertasAtivos = { dados: null, erro: false };
+let estadoHistoricoAlertas = { dados: null, erro: false };
 
-    if (!respostaAtivos.ok || !respostaHistorico.ok) throw new Error("Erro ao buscar alertas.");
-
-    const alertasAtivos = await respostaAtivos.json();
-    const historicoAlertas = await respostaHistorico.json();
-
-    if (listaAlertas) listaAlertas.innerHTML = "";
-    if (alertasDashboard) alertasDashboard.innerHTML = "";
-
-    if (listaAlertas) {
-      listaAlertas.innerHTML =
-        "<h4>Alertas ativos</h4>" +
-        (alertasAtivos.length
-          ? renderizarAlertas(alertasAtivos, true)
-          : "<p>Nenhum alerta ativo.</p>") +
-        '<h4 class="alert-history-title">Histórico de alertas</h4>' +
-        (historicoAlertas.length
-          ? renderizarAlertas(historicoAlertas, true)
-          : "<p>Nenhum alerta registrado.</p>");
-    }
-
-    if (alertasDashboard) {
-      alertasDashboard.innerHTML = alertasAtivos.length
-        ? alertasAtivos
-            .slice()
-            .reverse()
-            .slice(0, 2)
-            .map((alerta) => criarAlertaHTML(alerta, false))
-            .join("")
-        : "<p>Nenhum alerta ativo.</p>";
-    }
-  } catch (erro) {
-    console.error("Erro ao carregar alertas:", erro);
-
-    if (listaAlertas) listaAlertas.innerHTML = "<p>Erro ao carregar os alertas.</p>";
-    if (alertasDashboard) alertasDashboard.innerHTML = "<p>Erro ao carregar os alertas.</p>";
-  }
+function renderizarSecaoAlertas(estado, mensagemVazia) {
+  if (estado.erro) return "<p>Erro ao carregar os alertas.</p>";
+  if (estado.dados === null) return "<p>Carregando alertas...</p>";
+  return estado.dados.length ? renderizarAlertas(estado.dados, true) : `<p>${mensagemVazia}</p>`;
 }
 
-buscarAlertas();
+function atualizarListaAlertas() {
+  if (!listaAlertas) return;
+  const html =
+    "<h4>Alertas ativos</h4>" +
+    renderizarSecaoAlertas(estadoAlertasAtivos, "Nenhum alerta ativo.") +
+    '<h4 class="alert-history-title">Histórico de alertas</h4>' +
+    renderizarSecaoAlertas(estadoHistoricoAlertas, "Nenhum alerta registrado.");
+  if (listaAlertas.innerHTML !== html) listaAlertas.innerHTML = html;
+}
+
+function atualizarAlertasDashboard() {
+  if (!alertasDashboard) return;
+  let html;
+  if (estadoAlertasAtivos.erro) {
+    html = "<p>Erro ao carregar os alertas.</p>";
+  } else if (estadoAlertasAtivos.dados === null) {
+    html = "<p>Carregando alertas...</p>";
+  } else {
+    html = estadoAlertasAtivos.dados.length
+      ? estadoAlertasAtivos.dados
+          .slice()
+          .reverse()
+          .slice(0, 2)
+          .map((alerta) => criarAlertaHTML(alerta, false))
+          .join("")
+      : "<p>Nenhum alerta ativo.</p>";
+  }
+  if (alertasDashboard.innerHTML !== html) alertasDashboard.innerHTML = html;
+}
+
+function buscarAlertasAtivos() {
+  return consultarUmaVez("alertasAtivos", async () => {
+    try {
+      const { resposta, dados } = await consultarJSON("/api/alertas/ativos");
+      if (!resposta.ok || !Array.isArray(dados)) throw new Error("Erro ao buscar alertas ativos.");
+      estadoAlertasAtivos = { dados, erro: false };
+    } catch (erro) {
+      console.error("Erro ao carregar alertas ativos:", erro);
+      estadoAlertasAtivos.erro = true;
+    }
+    atualizarAlertasDashboard();
+    atualizarListaAlertas();
+  });
+}
+
+function buscarHistoricoAlertas() {
+  return consultarUmaVez("historicoAlertas", async () => {
+    try {
+      const { resposta, dados } = await consultarJSON("/api/alertas");
+      if (!resposta.ok || !Array.isArray(dados))
+        throw new Error("Erro ao buscar histórico de alertas.");
+      estadoHistoricoAlertas = { dados, erro: false };
+    } catch (erro) {
+      console.error("Erro ao carregar histórico de alertas:", erro);
+      estadoHistoricoAlertas.erro = true;
+    }
+    atualizarListaAlertas();
+  });
+}
+
+// A navegação para a página de alertas continua atualizando as duas seções.
+function buscarAlertas() {
+  return Promise.all([buscarAlertasAtivos(), buscarHistoricoAlertas()]);
+}
 
 // ===========================================================================
 // 16. Eventos da bomba
@@ -1010,32 +1073,44 @@ function criarEventoBombaHTML(evento) {
     `;
 }
 
-async function buscarUltimosEventos() {
-  if (!eventosDashboard) return;
+function buscarUltimosEventos() {
+  return consultarUmaVez("eventos", async () => {
+    if (!eventosDashboard) return;
 
-  try {
-    const resposta = await fetch("/api/historico-bomba");
+    try {
+      const { resposta, dados: historicoBomba } = await consultarJSON("/api/historico-bomba");
 
-    if (!resposta.ok) throw new Error("Erro ao buscar histórico da bomba.");
+      if (!resposta.ok) throw new Error("Erro ao buscar histórico da bomba.");
 
-    const historicoBomba = await resposta.json();
+      eventosDashboard.innerHTML = "";
 
-    eventosDashboard.innerHTML = "";
+      if (historicoBomba.length === 0) {
+        eventosDashboard.innerHTML = "<p>Nenhum acionamento da bomba registrado.</p>";
+        return;
+      }
 
-    if (historicoBomba.length === 0) {
-      eventosDashboard.innerHTML = "<p>Nenhum acionamento da bomba registrado.</p>";
-      return;
+      /* Exibe as cinco transições mais recentes em ordem decrescente de data. */
+      const eventosOrdenados = historicoBomba
+        .slice()
+        .sort((a, b) => new Date(b.dataHora) - new Date(a.dataHora));
+
+      eventosDashboard.innerHTML = eventosOrdenados.slice(0, 5).map(criarEventoBombaHTML).join("");
+    } catch (erro) {
+      console.error("Erro ao carregar eventos da bomba:", erro);
+
+      eventosDashboard.innerHTML = "<p>Erro ao carregar os eventos da bomba.</p>";
     }
-
-    /* Exibe as cinco transições mais recentes em ordem decrescente de data. */
-    const eventosOrdenados = historicoBomba
-      .slice()
-      .sort((a, b) => new Date(b.dataHora) - new Date(a.dataHora));
-
-    eventosDashboard.innerHTML = eventosOrdenados.slice(0, 5).map(criarEventoBombaHTML).join("");
-  } catch (erro) {
-    console.error("Erro ao carregar eventos da bomba:", erro);
-
-    eventosDashboard.innerHTML = "<p>Erro ao carregar os eventos da bomba.</p>";
-  }
+  });
 }
+
+// ===========================================================================
+// 17. Inicialização e agendamento
+// ===========================================================================
+
+// Primeira carga imediata, sem aguardar os temporizadores.
+atualizarDadosDinamicos();
+atualizarDadosSecundarios();
+buscarHistorico();
+
+setInterval(atualizarDadosDinamicos, INTERVALO_DINAMICO_MS);
+setInterval(atualizarDadosSecundarios, INTERVALO_SECUNDARIO_MS);

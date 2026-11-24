@@ -657,9 +657,22 @@ app.get("/api/status", (req, res) => {
   res.json(estadoParaInterface());
 });
 
-// Expõe apenas as últimas HISTORICO_RESPOSTA medições.
+// Mantém a janela padrão da tabela e permite consultas menores (ex.: gráfico).
 app.get("/api/historico", (req, res) => {
-  res.json(historico.slice(-HISTORICO_RESPOSTA));
+  let limite = HISTORICO_RESPOSTA;
+  if (req.query.limite !== undefined) {
+    const valor = req.query.limite;
+    if (
+      typeof valor !== "string" ||
+      !/^\d+$/.test(valor) ||
+      !Number.isSafeInteger(Number(valor)) ||
+      Number(valor) < 1
+    ) {
+      return res.status(400).json({ erro: "O limite deve ser um inteiro positivo." });
+    }
+    limite = Math.min(Number(valor), HISTORICO_RESPOSTA);
+  }
+  res.json(historico.slice(-limite));
 });
 
 app.get("/api/historico-bomba", (req, res) => {
